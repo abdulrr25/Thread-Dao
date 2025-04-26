@@ -33,6 +33,7 @@ interface DAODetailsProps {
 export default function DAODetails({ dao }: DAODetailsProps) {
   const { publicKey, connected } = useWallet();
   const [newProposal, setNewProposal] = useState('');
+  const [newMemberAddress, setNewMemberAddress] = useState('');
   const queryClient = useQueryClient();
 
   const { data: proposals, isLoading } = useQuery({
@@ -97,6 +98,34 @@ export default function DAODetails({ dao }: DAODetailsProps) {
     },
   });
 
+  const memberManagementMutation = useMutation({
+    mutationFn: async ({ walletAddress, action }: { walletAddress: string; action: 'invite' | 'remove' }) => {
+      if (!publicKey) throw new Error('Wallet not connected');
+      
+      const response = await fetch(`http://localhost:3001/api/daos/${dao.address}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress,
+          action,
+          requester: publicKey.toBase58(),
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} member`);
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['daos'] });
+      setNewMemberAddress('');
+    },
+  });
+
+  const isCreator = publicKey && dao.creator === publicKey.toBase58();
   const isMember = publicKey && dao.members.includes(publicKey.toBase58());
 
   return (
@@ -116,6 +145,64 @@ export default function DAODetails({ dao }: DAODetailsProps) {
           <span>Created: {new Date(dao.created_at).toLocaleDateString()}</span>
         </div>
       </div>
+
+      {isCreator && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            Manage Members
+          </h2>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              memberManagementMutation.mutate({
+                walletAddress: newMemberAddress,
+                action: 'invite',
+              });
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label
+                htmlFor="memberAddress"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                Wallet Address
+              </label>
+              <input
+                type="text"
+                id="memberAddress"
+                value={newMemberAddress}
+                onChange={(e) => setNewMemberAddress(e.target.value)}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                placeholder="Enter wallet address"
+                required
+              />
+            </div>
+            <div className="flex space-x-2">
+              <button
+                type="submit"
+                disabled={memberManagementMutation.isPending}
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                Invite Member
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  memberManagementMutation.mutate({
+                    walletAddress: newMemberAddress,
+                    action: 'remove',
+                  })
+                }
+                disabled={memberManagementMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+              >
+                Remove Member
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {isMember && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">

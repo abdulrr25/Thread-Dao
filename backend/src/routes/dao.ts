@@ -29,6 +29,12 @@ const voteSchema = z.object({
   vote: z.enum(['yes', 'no']),
 });
 
+// Schema for member management
+const memberManagementSchema = z.object({
+  walletAddress: z.string().min(1),
+  action: z.enum(['invite', 'remove']),
+});
+
 // Get all DAOs
 router.get('/', async (req, res) => {
   try {
@@ -109,6 +115,55 @@ router.post('/:address/join', async (req, res) => {
     } else {
       console.error('Error joining DAO:', error);
       res.status(500).json({ error: 'Failed to join DAO' });
+    }
+  }
+});
+
+// Manage DAO members
+router.post('/:address/members', async (req, res) => {
+  try {
+    const { address } = req.params;
+    const { walletAddress, action } = memberManagementSchema.parse(req.body);
+
+    const dao = await getDAO(address);
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found' });
+    }
+
+    // Only the creator can manage members
+    if (req.body.requester !== dao.creator) {
+      return res.status(403).json({ error: 'Only the DAO creator can manage members' });
+    }
+
+    if (action === 'invite') {
+      if (dao.members.includes(walletAddress)) {
+        return res.status(400).json({ error: 'Already a member' });
+      }
+      await addMember(address, walletAddress);
+    } else if (action === 'remove') {
+      if (!dao.members.includes(walletAddress)) {
+        return res.status(400).json({ error: 'Not a member' });
+      }
+      if (walletAddress === dao.creator) {
+        return res.status(400).json({ error: 'Cannot remove the DAO creator' });
+      }
+
+      const updatedMembers = dao.members.filter(member => member !== walletAddress);
+      const { error } = await supabase
+        .from('daos')
+        .update({ members: updatedMembers })
+        .eq('address', address);
+
+      if (error) throw error;
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: error.errors });
+    } else {
+      console.error('Error managing members:', error);
+      res.status(500).json({ error: 'Failed to manage members' });
     }
   }
 });
