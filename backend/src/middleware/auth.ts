@@ -1,8 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import { PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 import { AppError } from './errorHandler';
+import { AuthenticatedRequest } from '../types/express.js';
 
 declare global {
   namespace Express {
@@ -38,7 +40,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
       }
 
       // Add the user object to the request for use in route handlers
-      req.user = {
+      (req as AuthenticatedRequest).user = {
         walletAddress: publicKey,
       };
       next();
@@ -60,4 +62,20 @@ export const restrictTo = (...roles: string[]) => {
     // This will require adding roles to the user model and checking them here
     next();
   };
+};
+
+export const authenticateUser = (req: Request, res: Response, next: NextFunction) => {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    (req as AuthenticatedRequest).user = decoded as { walletAddress: string };
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 }; 

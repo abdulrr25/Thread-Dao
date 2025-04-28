@@ -1,11 +1,11 @@
 import express from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../middleware/validate';
 import {
   getWritingSuggestions,
   semanticSearch,
-  findFounderMatches,
+  findFounderMatches
 } from '../services/ai';
+import { supabase } from '../index';
 
 const router = express.Router();
 
@@ -28,7 +28,6 @@ const founderMatchingSchema = z.object({
 
 router.post(
   '/writing-assistant',
-  validateRequest(writingAssistantSchema),
   async (req, res) => {
     try {
       const suggestions = await getWritingSuggestions(req.body);
@@ -37,7 +36,6 @@ router.post(
         data: suggestions,
       });
     } catch (error) {
-      console.error('Error in writing assistant:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to get writing suggestions',
@@ -48,7 +46,6 @@ router.post(
 
 router.post(
   '/semantic-search',
-  validateRequest(semanticSearchSchema),
   async (req, res) => {
     try {
       const results = await semanticSearch(req.body);
@@ -57,7 +54,6 @@ router.post(
         data: results,
       });
     } catch (error) {
-      console.error('Error in semantic search:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to perform semantic search',
@@ -68,7 +64,6 @@ router.post(
 
 router.post(
   '/founder-matching',
-  validateRequest(founderMatchingSchema),
   async (req, res) => {
     try {
       const matches = await findFounderMatches(req.body);
@@ -77,7 +72,6 @@ router.post(
         data: matches,
       });
     } catch (error) {
-      console.error('Error in founder matching:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to find founder matches',
@@ -85,5 +79,36 @@ router.post(
     }
   }
 );
+
+// Get AI suggestions for a post
+router.get('/suggestions/:postId', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('ai_suggestions')
+      .select('*')
+      .eq('post_id', req.params.postId);
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch AI suggestions' });
+  }
+});
+
+// Generate AI content
+router.post('/generate', async (req, res) => {
+  try {
+    const { prompt, type } = req.body;
+    
+    // TODO: Implement AI content generation logic
+    // This is a placeholder response
+    res.json({
+      content: 'AI generated content based on prompt',
+      type
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate AI content' });
+  }
+});
 
 export default router;

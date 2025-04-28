@@ -16,4 +16,6 @@ export const rateLimitMiddleware = (req: Request, res: Response, next: NextFunct
     return next();
   }
   return limiter(req, res, next);
-}; 
+};
+
+export { limiter as rateLimit }; 

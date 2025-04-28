@@ -1,28 +1,28 @@
 import { Request, Response } from 'express';
-import openai from '../services/openaiService';
+import openai from '../services/openaiService.js';
 
-export const aiWrite = async (req: Request, res: Response) => {
-  const { prompt } = req.body;
+export const generateResponse = async (req: Request, res: Response) => {
   try {
-    const completion = await openai.createChatCompletion({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
+    const { prompt } = req.body;
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [{ role: "user", content: prompt }],
     });
-    res.json({ response: completion.data.choices[0].message?.content });
-  } catch (error) {
+    res.json({ response: completion.choices[0].message.content });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 };
 
-export const semanticSearch = async (req: Request, res: Response) => {
-  const { query } = req.body;
+export const generateEmbedding = async (req: Request, res: Response) => {
   try {
-    const embedding = await openai.createEmbedding({
-      model: 'text-embedding-ada-002',
-      input: query,
+    const { text } = req.body;
+    const embedding = await openai.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: text,
     });
-    res.json({ embedding: embedding.data.data[0].embedding });
-  } catch (error) {
+    res.json({ embedding: embedding.data[0].embedding });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 };

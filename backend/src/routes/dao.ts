@@ -1,13 +1,14 @@
-import express from 'express';
+import express, { Router } from 'express';
 import { z } from 'zod';
 import { supabase } from '../lib/supabase';
 import { createDAO, getDAO, addMember } from '../services/dao';
-import { rateLimit } from '../middleware/rateLimit';
+import { rateLimitMiddleware } from '../middleware/rateLimit.js';
 import { validateRequest } from '../middleware/validateRequest';
-import { authenticate } from '../middleware/authenticate';
+import { authenticateUser } from '../middleware/auth.js';
 import { sanitizeInput } from '../middleware/sanitizeInput';
+import { AuthenticatedRequest } from '../types/express.js';
 
-const router = express.Router();
+const router = Router();
 
 // Schema for creating a DAO
 const createDAOSchema = z.object({
@@ -40,7 +41,10 @@ const memberManagementSchema = z.object({
 });
 
 // Apply rate limiting to all routes
-router.use(rateLimit);
+router.use(rateLimitMiddleware);
+
+// Apply authentication to all routes
+router.use(authenticateUser);
 
 // Get all DAOs
 router.get('/', async (req, res) => {
@@ -63,32 +67,23 @@ router.get('/', async (req, res) => {
 });
 
 // Create a new DAO
-router.post('/', 
-  authenticate,
-  validateRequest(createDAOSchema),
-  sanitizeInput,
-  async (req, res) => {
-    try {
-      const { title, description, creator } = req.body;
+router.post('/', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { name, description } = req.body;
+    const creator = req.user.walletAddress;
 
-      // Check if creator is the authenticated user
-      if (creator !== req.user.walletAddress) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
+    const dao = await createDAO({
+      title: name,
+      description,
+      creator,
+    });
 
-      const dao = await createDAO({
-        title,
-        description,
-        creator,
-      });
-
-      res.json(dao);
-    } catch (error) {
-      console.error('Error creating DAO:', error);
-      res.status(500).json({ error: 'Failed to create DAO' });
-    }
+    res.json(dao);
+  } catch (error) {
+    console.error('Error creating DAO:', error);
+    res.status(500).json({ error: 'Failed to create DAO' });
   }
-);
+});
 
 // Get a specific DAO
 router.get('/:address', async (req, res) => {
@@ -114,155 +109,121 @@ router.get('/:address', async (req, res) => {
 });
 
 // Join a DAO
-router.post('/:address/join',
-  authenticate,
-  validateRequest(joinDAOSchema),
-  sanitizeInput,
-  async (req, res) => {
-    try {
-      const { address } = req.params;
-      const { walletAddress } = req.body;
+router.post('/:address/join', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { address } = req.params;
+    const { walletAddress } = req.body;
 
-      // Validate address format
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
-        return res.status(400).json({ error: 'Invalid DAO address format' });
-      }
+    if (walletAddress !== req.user.walletAddress) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
 
-      // Check if wallet address matches authenticated user
-      if (walletAddress !== req.user.walletAddress) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
+    const dao = await getDAO(address);
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found' });
+    }
 
-      const dao = await getDAO(address);
-      if (!dao) {
-        return res.status(404).json({ error: 'DAO not found' });
-      }
+    if (dao.members.includes(walletAddress)) {
+      return res.status(400).json({ error: 'Already a member' });
+    }
 
+    await addMember(address, walletAddress);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error joining DAO:', error);
+    res.status(500).json({ error: 'Failed to join DAO' });
+  }
+});
+
+// Manage DAO members
+router.post('/:address/members', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { address } = req.params;
+    const { walletAddress, action } = req.body;
+
+    const dao = await getDAO(address);
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found' });
+    }
+
+    if (req.user.walletAddress !== dao.creator) {
+      return res.status(403).json({ error: 'Only the DAO creator can manage members' });
+    }
+
+    if (action === 'invite') {
       if (dao.members.includes(walletAddress)) {
         return res.status(400).json({ error: 'Already a member' });
       }
-
       await addMember(address, walletAddress);
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error joining DAO:', error);
-      res.status(500).json({ error: 'Failed to join DAO' });
-    }
-  }
-);
-
-// Manage DAO members
-router.post('/:address/members',
-  authenticate,
-  validateRequest(memberManagementSchema),
-  sanitizeInput,
-  async (req, res) => {
-    try {
-      const { address } = req.params;
-      const { walletAddress, action } = req.body;
-
-      // Validate address format
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
-        return res.status(400).json({ error: 'Invalid DAO address format' });
+    } else if (action === 'remove') {
+      if (!dao.members.includes(walletAddress)) {
+        return res.status(400).json({ error: 'Not a member' });
+      }
+      if (walletAddress === dao.creator) {
+        return res.status(400).json({ error: 'Cannot remove the DAO creator' });
       }
 
-      const dao = await getDAO(address);
-      if (!dao) {
-        return res.status(404).json({ error: 'DAO not found' });
-      }
-
-      // Only the creator can manage members
-      if (req.user.walletAddress !== dao.creator) {
-        return res.status(403).json({ error: 'Only the DAO creator can manage members' });
-      }
-
-      if (action === 'invite') {
-        if (dao.members.includes(walletAddress)) {
-          return res.status(400).json({ error: 'Already a member' });
-        }
-        await addMember(address, walletAddress);
-      } else if (action === 'remove') {
-        if (!dao.members.includes(walletAddress)) {
-          return res.status(400).json({ error: 'Not a member' });
-        }
-        if (walletAddress === dao.creator) {
-          return res.status(400).json({ error: 'Cannot remove the DAO creator' });
-        }
-
-        const updatedMembers = dao.members.filter(member => member !== walletAddress);
-        const { error } = await supabase
-          .from('daos')
-          .update({ members: updatedMembers })
-          .eq('address', address);
-
-        if (error) {
-          console.error('Database error:', error);
-          return res.status(500).json({ error: 'Failed to remove member' });
-        }
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error managing members:', error);
-      res.status(500).json({ error: 'Failed to manage members' });
-    }
-  }
-);
-
-// Create a proposal
-router.post('/:address/proposals',
-  authenticate,
-  validateRequest(createProposalSchema),
-  sanitizeInput,
-  async (req, res) => {
-    try {
-      const { address } = req.params;
-      const { proposal, proposer } = req.body;
-
-      // Validate address format
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
-        return res.status(400).json({ error: 'Invalid DAO address format' });
-      }
-
-      // Check if proposer is the authenticated user
-      if (proposer !== req.user.walletAddress) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
-
-      const dao = await getDAO(address);
-      if (!dao) {
-        return res.status(404).json({ error: 'DAO not found' });
-      }
-
-      if (!dao.members.includes(proposer)) {
-        return res.status(403).json({ error: 'Not a member of this DAO' });
-      }
-
-      const { data, error } = await supabase
-        .from('proposals')
-        .insert({
-          dao_address: address,
-          proposal,
-          proposer,
-          status: 'pending',
-          votes: [],
-        })
-        .select()
-        .single();
+      const updatedMembers = dao.members.filter(member => member !== walletAddress);
+      const { error } = await supabase
+        .from('daos')
+        .update({ members: updatedMembers })
+        .eq('address', address);
 
       if (error) {
         console.error('Database error:', error);
-        return res.status(500).json({ error: 'Failed to create proposal' });
+        return res.status(500).json({ error: 'Failed to remove member' });
       }
-
-      res.json(data);
-    } catch (error) {
-      console.error('Error creating proposal:', error);
-      res.status(500).json({ error: 'Failed to create proposal' });
     }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error managing members:', error);
+    res.status(500).json({ error: 'Failed to manage members' });
   }
-);
+});
+
+// Create a proposal
+router.post('/:address/proposals', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { address } = req.params;
+    const { proposal, proposer } = req.body;
+
+    if (proposer !== req.user.walletAddress) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const dao = await getDAO(address);
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found' });
+    }
+
+    if (!dao.members.includes(proposer)) {
+      return res.status(403).json({ error: 'Not a member of this DAO' });
+    }
+
+    const { data, error } = await supabase
+      .from('proposals')
+      .insert({
+        dao_address: address,
+        proposal,
+        proposer,
+        status: 'pending',
+        votes: [],
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Database error:', error);
+      return res.status(500).json({ error: 'Failed to create proposal' });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error creating proposal:', error);
+    res.status(500).json({ error: 'Failed to create proposal' });
+  }
+});
 
 // Get proposals for a DAO
 router.get('/:address/proposals', async (req, res) => {
@@ -293,80 +254,63 @@ router.get('/:address/proposals', async (req, res) => {
 });
 
 // Vote on a proposal
-router.post('/:address/proposals/:proposalId/vote',
-  authenticate,
-  validateRequest(voteSchema),
-  sanitizeInput,
-  async (req, res) => {
-    try {
-      const { address, proposalId } = req.params;
-      const { voter, vote } = req.body;
+router.post('/:address/proposals/:proposalId/vote', async (req: AuthenticatedRequest, res) => {
+  try {
+    const { address, proposalId } = req.params;
+    const { voter, vote } = req.body;
 
-      // Validate address format
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
-        return res.status(400).json({ error: 'Invalid DAO address format' });
-      }
-
-      // Check if voter is the authenticated user
-      if (voter !== req.user.walletAddress) {
-        return res.status(403).json({ error: 'Unauthorized' });
-      }
-
-      // Check if DAO exists
-      const dao = await getDAO(address);
-      if (!dao) {
-        return res.status(404).json({ error: 'DAO not found' });
-      }
-
-      // Check if voter is a member
-      if (!dao.members.includes(voter)) {
-        return res.status(403).json({ error: 'Not a member of this DAO' });
-      }
-
-      // Get the proposal
-      const { data: proposal, error: proposalError } = await supabase
-        .from('proposals')
-        .select('*')
-        .eq('id', proposalId)
-        .single();
-
-      if (proposalError) {
-        console.error('Database error:', proposalError);
-        return res.status(500).json({ error: 'Failed to fetch proposal' });
-      }
-
-      if (!proposal) {
-        return res.status(404).json({ error: 'Proposal not found' });
-      }
-
-      // Check if proposal belongs to the DAO
-      if (proposal.dao_address !== address) {
-        return res.status(400).json({ error: 'Invalid proposal for this DAO' });
-      }
-
-      // Check if user has already voted
-      if (proposal.votes.some((v: any) => v.voter === voter)) {
-        return res.status(400).json({ error: 'Already voted on this proposal' });
-      }
-
-      // Add vote
-      const updatedVotes = [...proposal.votes, { voter, vote }];
-      const { error: updateError } = await supabase
-        .from('proposals')
-        .update({ votes: updatedVotes })
-        .eq('id', proposalId);
-
-      if (updateError) {
-        console.error('Database error:', updateError);
-        return res.status(500).json({ error: 'Failed to record vote' });
-      }
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Error voting on proposal:', error);
-      res.status(500).json({ error: 'Failed to vote on proposal' });
+    if (voter !== req.user.walletAddress) {
+      return res.status(403).json({ error: 'Unauthorized' });
     }
+
+    const dao = await getDAO(address);
+    if (!dao) {
+      return res.status(404).json({ error: 'DAO not found' });
+    }
+
+    if (!dao.members.includes(voter)) {
+      return res.status(403).json({ error: 'Not a member of this DAO' });
+    }
+
+    const { data: proposal, error: proposalError } = await supabase
+      .from('proposals')
+      .select('*')
+      .eq('id', proposalId)
+      .single();
+
+    if (proposalError) {
+      console.error('Database error:', proposalError);
+      return res.status(500).json({ error: 'Failed to fetch proposal' });
+    }
+
+    if (!proposal) {
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    if (proposal.dao_address !== address) {
+      return res.status(400).json({ error: 'Invalid proposal for this DAO' });
+    }
+
+    if (proposal.votes.some((v: any) => v.voter === voter)) {
+      return res.status(400).json({ error: 'Already voted on this proposal' });
+    }
+
+    const updatedVotes = [...proposal.votes, { voter, vote }];
+    const { error: updateError } = await supabase
+      .from('proposals')
+      .update({ votes: updatedVotes })
+      .eq('id', proposalId);
+
+    if (updateError) {
+      console.error('Database error:', updateError);
+      return res.status(500).json({ error: 'Failed to record vote' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error voting on proposal:', error);
+    res.status(500).json({ error: 'Failed to vote on proposal' });
   }
-);
+});
 
 export default router; 
