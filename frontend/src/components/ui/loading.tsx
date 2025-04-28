@@ -1,33 +1,22 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface LoadingProps {
-  className?: string;
   size?: 'sm' | 'md' | 'lg';
-  text?: string;
+  className?: string;
 }
 
-export const Loading: React.FC<LoadingProps> = ({
-  className,
-  size = 'md',
-  text,
-}) => {
+export const Loading: React.FC<LoadingProps> = ({ size = 'md', className = '' }) => {
   const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-6 w-6',
-    lg: 'h-8 w-8',
+    sm: 'w-4 h-4',
+    md: 'w-8 h-8',
+    lg: 'w-12 h-12',
   };
 
   return (
-    <div className={cn('flex items-center justify-center gap-2', className)}>
-      <Loader2
-        className={cn(
-          'animate-spin text-primary',
-          sizeClasses[size]
-        )}
+    <div className={`flex items-center justify-center ${className}`}>
+      <div
+        className={`${sizeClasses[size]} border-4 border-blue-500 border-t-transparent rounded-full animate-spin`}
       />
-      {text && <span className="text-sm text-muted-foreground">{text}</span>}
     </div>
   );
 }; 

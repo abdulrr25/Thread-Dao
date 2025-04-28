@@ -5,13 +5,19 @@ import bs58 from 'bs58';
 import nacl from 'tweetnacl';
 import { AppError } from './errorHandler';
 import { AuthenticatedRequest } from '../types/express.js';
+import { AuthenticationError } from '../lib/errors';
+import { envVars } from '../lib/env';
+
+interface JwtPayload {
+  walletAddress: string;
+  iat: number;
+  exp: number;
+}
 
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        walletAddress: string;
-      };
+      user?: JwtPayload;
     }
   }
 }
@@ -64,18 +70,25 @@ export const restrictTo = (...roles: string[]) => {
   };
 };
 
-export const authenticateUser = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
+export const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-    (req as AuthenticatedRequest).user = decoded as { walletAddress: string };
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new AuthenticationError('No token provided');
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, envVars.JWT_SECRET) as JwtPayload;
+
+    req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    if (error instanceof jwt.JsonWebTokenError) {
+      next(new AuthenticationError('Invalid token'));
+    } else if (error instanceof jwt.TokenExpiredError) {
+      next(new AuthenticationError('Token expired'));
+    } else {
+      next(error);
+    }
   }
 }; 
