@@ -1,46 +1,57 @@
-import { Toaster } from "./components/ui/toaster";
-import { TooltipProvider } from "./components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { WalletProvider } from "./context/WalletContext";
-import Index from "./pages/Index";
-import Feed from "./pages/Feed";
-import NotFound from "./pages/NotFound";
-import Explore from "./pages/Explore";
-import Notifications from "./pages/Notifications";
-import SemanticSearch from "./pages/SemanticSearch";
-import Profile from "./pages/Profile";
-import DaoDetails from "./pages/DaoDetails";
-import Chat from "./pages/Chat";
-import CreateDao from "./pages/CreateDao";
-import MyDAOs from "./pages/MyDAOs";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { Toaster } from '@/components/ui/toaster';
+import { WalletProvider } from '@/context/WalletContext';
+import Sidebar from '@/components/Sidebar';
+import Navigation from '@/components/Navigation';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const queryClient = new QueryClient();
+// Pages
+import Home from '@/pages/Home';
+import Profile from '@/pages/Profile';
+import Chat from '@/pages/Chat';
+import DAO from '@/pages/DAO';
+import CreatePost from '@/pages/CreatePost';
+import NotFound from '@/pages/NotFound';
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <WalletProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/feed" element={<Feed />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/semantic-search" element={<SemanticSearch />} />
-            <Route path="/my-daos" element={<MyDAOs />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/dao/:id" element={<DaoDetails />} />
-            <Route path="/chat/:id" element={<Chat />} />
-            <Route path="/create-dao" element={<CreateDao />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </WalletProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <WalletProvider>
+          <Router>
+            <div className="flex min-h-screen">
+              <Sidebar />
+              <div className="flex-1">
+                <Navigation />
+                <main className="container mx-auto p-4">
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/profile/:address" element={<Profile />} />
+                    <Route path="/chat" element={<Chat />} />
+                    <Route path="/dao/:id" element={<DAO />} />
+                    <Route path="/create-post" element={<CreatePost />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+              </div>
+            </div>
+            <Toaster />
+          </Router>
+        </WalletProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+}
 
 export default App;
