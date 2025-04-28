@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { ConnectionProvider, WalletProvider as SolanaWalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
@@ -13,6 +13,18 @@ interface WalletContextType {
   connected: boolean;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
+  network: WalletAdapterNetwork;
+}
+
+interface SolanaWindow extends Window {
+  solana?: {
+    isConnected: boolean;
+    publicKey?: { toString: () => string };
+    connect: () => Promise<void>;
+    disconnect: () => Promise<void>;
+    on: (event: string, callback: (publicKey: string | null) => void) => void;
+    removeListener: (event: string, callback: (publicKey: string | null) => void) => void;
+  };
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
@@ -27,92 +39,107 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const endpoint = clusterApiUrl(network);
   const wallets = [new PhantomWalletAdapter()];
 
+  const handleAccountChanged = useCallback((publicKey: string | null) => {
+    if (publicKey) {
+      setPublicKey(publicKey);
+      setConnected(true);
+      toast({
+        title: "Account Changed",
+        description: "Your wallet account has been changed.",
+      });
+    } else {
+      setPublicKey(null);
+      setConnected(false);
+      toast({
+        title: "Account Disconnected",
+        description: "Your wallet account has been disconnected.",
+      });
+    }
+  }, [toast]);
+
+  const handleConnectError = useCallback((error: Error) => {
+    console.error('Wallet connection error:', error);
+    toast({
+      title: "Connection Error",
+      description: error.message || "Failed to connect wallet",
+      variant: "destructive",
+    });
+  }, [toast]);
+
   useEffect(() => {
-    // Check if wallet is already connected
     const checkConnection = async () => {
-      if (typeof window !== 'undefined' && window.solana?.isConnected) {
-        try {
-          const publicKey = window.solana.publicKey?.toString();
-          if (publicKey) {
-            setPublicKey(publicKey);
-            setConnected(true);
+      if (typeof window !== 'undefined') {
+        const solanaWindow = window as SolanaWindow;
+        if (solanaWindow.solana?.isConnected) {
+          try {
+            const publicKey = solanaWindow.solana.publicKey?.toString();
+            if (publicKey) {
+              setPublicKey(publicKey);
+              setConnected(true);
+            }
+          } catch (err) {
+            handleConnectError(err as Error);
           }
-        } catch (err) {
-          console.error('Failed to check wallet connection:', err);
         }
       }
     };
     checkConnection();
 
-    // Listen for account changes
-    const handleAccountChanged = (publicKey: string | null) => {
-      if (publicKey) {
-        setPublicKey(publicKey);
-        setConnected(true);
-      } else {
-        setPublicKey(null);
-        setConnected(false);
-      }
-    };
-
-    if (window.solana) {
-      window.solana.on('accountChanged', handleAccountChanged);
+    const solanaWindow = window as SolanaWindow;
+    if (solanaWindow.solana) {
+      solanaWindow.solana.on('accountChanged', handleAccountChanged);
     }
 
     return () => {
-      if (window.solana) {
-        window.solana.removeListener('accountChanged', handleAccountChanged);
+      if (solanaWindow.solana) {
+        solanaWindow.solana.removeListener('accountChanged', handleAccountChanged);
       }
     };
-  }, []);
+  }, [handleAccountChanged, handleConnectError]);
 
   const connect = async () => {
-    if (typeof window !== 'undefined' && window.solana) {
-      try {
-        await window.solana.connect();
-        const publicKey = window.solana.publicKey?.toString();
-        if (publicKey) {
-          setPublicKey(publicKey);
-          setConnected(true);
-          toast({
-            title: "Wallet Connected",
-            description: "Your wallet has been connected successfully.",
-          });
+    if (typeof window !== 'undefined') {
+      const solanaWindow = window as SolanaWindow;
+      if (solanaWindow.solana) {
+        try {
+          await solanaWindow.solana.connect();
+          const publicKey = solanaWindow.solana.publicKey?.toString();
+          if (publicKey) {
+            setPublicKey(publicKey);
+            setConnected(true);
+            toast({
+              title: "Wallet Connected",
+              description: "Your wallet has been connected successfully.",
+            });
+          }
+        } catch (err) {
+          handleConnectError(err as Error);
         }
-      } catch (err) {
-        console.error('Failed to connect wallet:', err);
+      } else {
         toast({
           title: "Error",
-          description: "Failed to connect wallet",
+          description: "Phantom wallet not found. Please install Phantom wallet.",
           variant: "destructive",
         });
       }
-    } else {
-      toast({
-        title: "Error",
-        description: "Phantom wallet not found",
-        variant: "destructive",
-      });
     }
   };
 
   const disconnect = async () => {
-    if (window.solana) {
-      try {
-        await window.solana.disconnect();
-        setPublicKey(null);
-        setConnected(false);
-        toast({
-          title: "Wallet Disconnected",
-          description: "Your wallet has been disconnected successfully.",
-        });
-      } catch (err) {
-        console.error('Failed to disconnect wallet:', err);
-        toast({
-          title: "Error",
-          description: "Failed to disconnect wallet",
-          variant: "destructive",
-        });
+    if (typeof window !== 'undefined') {
+      const solanaWindow = window as SolanaWindow;
+      if (solanaWindow.solana) {
+        try {
+          await solanaWindow.solana.disconnect();
+          setPublicKey(null);
+          setConnected(false);
+          toast({
+            title: "Wallet Disconnected",
+            description: "Your wallet has been disconnected successfully.",
+          });
+        } catch (err) {
+          handleConnectError(err as Error);
+        }
       }
     }
   };
@@ -127,6 +154,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
               connected,
               connect,
               disconnect,
+              network,
             }}
           >
             {children}

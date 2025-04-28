@@ -140,5 +140,29 @@ export const api = {
   }) => {
     const response = await axios.put(`${API_URL}/daos/${id}`, data);
     return response.data;
+  },
+
+  // Featured DAOs
+  getFeaturedDaos: async (): Promise<DAO[]> => {
+    const { data, error } = await supabase
+      .from('daos')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Trending Posts
+  getTrendingPosts: async (): Promise<Post[]> => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(4);
+
+    if (error) throw error;
+    return data;
   }
 }; 

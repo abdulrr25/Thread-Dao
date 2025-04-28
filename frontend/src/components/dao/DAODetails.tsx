@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'react-hot-toast';
+import { Spinner } from '@/components/ui/Spinner';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
 
 interface Proposal {
   id: string;
@@ -35,7 +38,7 @@ export default function DAODetails({ dao }: DAODetailsProps) {
   const [newMemberAddress, setNewMemberAddress] = useState('');
   const queryClient = useQueryClient();
 
-  const { data: proposals, isLoading } = useQuery({
+  const { data: proposals, isLoading, error } = useQuery({
     queryKey: ['proposals', dao.address],
     queryFn: async () => {
       const response = await fetch(`http://localhost:3001/api/daos/${dao.address}/proposals`);
@@ -43,6 +46,9 @@ export default function DAODetails({ dao }: DAODetailsProps) {
         throw new Error('Failed to fetch proposals');
       }
       return response.json();
+    },
+    onError: (error) => {
+      toast.error('Failed to load proposals');
     },
   });
 
@@ -62,13 +68,18 @@ export default function DAODetails({ dao }: DAODetailsProps) {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to create proposal');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create proposal');
       }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['proposals', dao.address] });
       setNewProposal('');
+      toast.success('Proposal created successfully');
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Failed to create proposal');
     },
   });
 
@@ -153,6 +164,10 @@ export default function DAODetails({ dao }: DAODetailsProps) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!newMemberAddress.trim()) {
+                toast.error('Please enter a valid wallet address');
+                return;
+              }
               memberManagementMutation.mutate({
                 walletAddress: newMemberAddress,
                 action: 'invite',
@@ -175,24 +190,37 @@ export default function DAODetails({ dao }: DAODetailsProps) {
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 placeholder="Enter wallet address"
                 required
+                pattern="^[1-9A-HJ-NP-Za-km-z]{32,44}$"
+                title="Please enter a valid Solana wallet address"
               />
             </div>
             <div className="flex space-x-2">
               <button
                 type="submit"
                 disabled={memberManagementMutation.isPending}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 flex items-center"
               >
-                Invite Member
+                {memberManagementMutation.isPending ? (
+                  <>
+                    <Spinner className="w-4 h-4 mr-2" />
+                    Processing...
+                  </>
+                ) : (
+                  'Invite Member'
+                )}
               </button>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  if (!newMemberAddress.trim()) {
+                    toast.error('Please enter a valid wallet address');
+                    return;
+                  }
                   memberManagementMutation.mutate({
                     walletAddress: newMemberAddress,
                     action: 'remove',
-                  })
-                }
+                  });
+                }}
                 disabled={memberManagementMutation.isPending}
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
               >
@@ -211,6 +239,10 @@ export default function DAODetails({ dao }: DAODetailsProps) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
+              if (!newProposal.trim()) {
+                toast.error('Please enter a proposal');
+                return;
+              }
               createProposalMutation.mutate(newProposal);
             }}
             className="space-y-4"
@@ -222,13 +254,22 @@ export default function DAODetails({ dao }: DAODetailsProps) {
               className="w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               rows={4}
               required
+              minLength={10}
+              maxLength={1000}
             />
             <button
               type="submit"
               disabled={createProposalMutation.isPending}
-              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 flex items-center"
             >
-              Submit Proposal
+              {createProposalMutation.isPending ? (
+                <>
+                  <Spinner className="w-4 h-4 mr-2" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Proposal'
+              )}
             </button>
           </form>
         </div>
@@ -239,7 +280,11 @@ export default function DAODetails({ dao }: DAODetailsProps) {
           Proposals
         </h2>
         {isLoading ? (
-          <p className="text-gray-600 dark:text-gray-300">Loading proposals...</p>
+          <div className="flex justify-center items-center py-8">
+            <Spinner className="w-8 h-8" />
+          </div>
+        ) : error ? (
+          <ErrorMessage message="Failed to load proposals" />
         ) : proposals?.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-300">No proposals yet</p>
         ) : (
