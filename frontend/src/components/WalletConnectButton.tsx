@@ -1,24 +1,24 @@
 import React from 'react';
-import { Button } from "@/components/ui/button";
+import { Button } from "./ui/button";
 import { WalletIcon } from 'lucide-react';
-import { useWallet } from '@/context/WalletContext';
-import { useToast } from "@/hooks/use-toast";
+import { useWallet } from '../context/WalletContext';
+import { useToast } from "../hooks/use-toast";
 
 const WalletConnectButton: React.FC = () => {
-  const { address, isConnected, connectWallet, disconnectWallet } = useWallet();
+  const { address, connected, connect, disconnect } = useWallet();
   const { toast } = useToast();
   const shortAddress = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : '';
 
   const handleClick = async () => {
     try {
-      if (isConnected) {
-        disconnectWallet();
+      if (connected) {
+        await disconnect();
         toast({
           title: "Wallet Disconnected",
           description: "Your wallet has been disconnected successfully.",
         });
       } else {
-        await connectWallet();
+        await connect();
         toast({
           title: "Wallet Connected",
           description: "Your wallet has been connected successfully.",
@@ -37,11 +37,11 @@ const WalletConnectButton: React.FC = () => {
   return (
     <Button 
       onClick={handleClick}
-      variant={isConnected ? "outline" : "default"}
-      className={`rounded-full font-medium transition-all ${isConnected ? 'bg-muted hover:bg-muted/80' : 'bg-thread-purple hover:bg-thread-purple/90'}`}
+      variant={connected ? "outline" : "default"}
+      className={`rounded-full font-medium transition-all ${connected ? 'bg-muted hover:bg-muted/80' : 'bg-thread-purple hover:bg-thread-purple/90'}`}
     >
       <WalletIcon className="w-4 h-4 mr-2" />
-      {isConnected ? shortAddress : "Connect Wallet"}
+      {connected ? shortAddress : "Connect Wallet"}
     </Button>
   );
 };

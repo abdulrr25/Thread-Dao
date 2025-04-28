@@ -1,8 +1,8 @@
-import Hero from '@/components/landing/Hero';
-import Features from '@/components/landing/Features';
-import HowItWorks from '@/components/landing/HowItWorks';
-import Footer from '@/components/landing/Footer';
-import { Button } from '@/components/ui/button';
+import Hero from '../components/landing/Hero';
+import Features from '../components/landing/Features';
+import HowItWorks from '../components/landing/HowItWorks';
+import Footer from '../components/landing/Footer';
+import { Button } from '../components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 

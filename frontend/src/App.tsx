@@ -1,5 +1,5 @@
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "./components/ui/toaster";
+import { TooltipProvider } from "./components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WalletProvider } from "./context/WalletContext";
@@ -13,7 +13,7 @@ import Profile from "./pages/Profile";
 import DaoDetails from "./pages/DaoDetails";
 import Chat from "./pages/Chat";
 import CreateDao from "./pages/CreateDao";
-import MyDAOs from "./pages/MyDaos";
+import MyDAOs from "./pages/MyDAOs";
 
 const queryClient = new QueryClient();
 

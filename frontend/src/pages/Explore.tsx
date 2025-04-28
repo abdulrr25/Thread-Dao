@@ -1,5 +1,5 @@
 import Sidebar from '@/components/Sidebar';
-import TrendingDAOs from '@/components/TrendingDao';
+import TrendingDAOs from '@/components/TrendingDAO';
 import DiscoverSuggestions from '@/components/DiscoverSuggestions';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

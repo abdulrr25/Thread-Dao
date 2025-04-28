@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useWallet } from '@/context/WalletContext';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
 
 interface Proposal {
   id: string;
