@@ -18,4 +18,25 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  define: {
+    'process.env': {},
+    'global': {},
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      define: {
+        global: 'globalThis',
+      },
+      plugins: [
+        {
+          name: 'fix-buffer',
+          setup(build) {
+            build.onResolve({ filter: /^buffer$/ }, () => {
+              return { path: require.resolve('buffer/') }
+            })
+          },
+        },
+      ],
+    },
+  },
 })

@@ -1,61 +1,8 @@
 import express from 'express';
-import { supabase, solanaConnection } from '../index';
-import { createPostSchema } from '../schemas/post';
-import { validateRequest } from '../middleware/validate';
-import { uploadToIPFS } from '../services/ipfs';
-import { createDAO } from '../services/dao';
+import { supabase } from '../index';
+import { Post } from '../types/post';
 
 const router = express.Router();
-
-// Create a new post/DAO
-router.post('/', validateRequest(createPostSchema), async (req, res) => {
-  try {
-    const { content, media, title, walletAddress } = req.body;
-
-    // Upload media to IPFS if provided
-    let mediaUrl = null;
-    if (media) {
-      mediaUrl = await uploadToIPFS(media);
-    }
-
-    // Create DAO smart contract
-    const daoAddress = await createDAO({
-      title,
-      creator: walletAddress,
-      initialMembers: [walletAddress],
-    });
-
-    // Store post metadata in Supabase
-    const { data, error } = await supabase
-      .from('posts')
-      .insert({
-        content,
-        media_url: mediaUrl,
-        title,
-        creator_wallet: walletAddress,
-        dao_address: daoAddress,
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.status(201).json({
-      success: true,
-      data: {
-        ...data,
-        daoAddress,
-      },
-    });
-  } catch (error) {
-    console.error('Error creating post:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to create post',
-    });
-  }
-});
 
 // Get all posts
 router.get('/', async (req, res) => {
@@ -66,21 +13,13 @@ router.get('/', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-
-    res.json({
-      success: true,
-      data,
-    });
+    res.json(data);
   } catch (error) {
-    console.error('Error fetching posts:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch posts',
-    });
+    res.status(500).json({ error: 'Failed to fetch posts' });
   }
 });
 
-// Get a specific post
+// Get post by ID
 router.get('/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -90,17 +29,57 @@ router.get('/:id', async (req, res) => {
       .single();
 
     if (error) throw error;
-
-    res.json({
-      success: true,
-      data,
-    });
+    res.json(data);
   } catch (error) {
-    console.error('Error fetching post:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch post',
-    });
+    res.status(500).json({ error: 'Failed to fetch post' });
+  }
+});
+
+// Create post
+router.post('/', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .insert([req.body])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// Update post
+router.put('/:id', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .update(req.body)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update post' });
+  }
+});
+
+// Delete post
+router.delete('/:id', async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', req.params.id);
+
+    if (error) throw error;
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete post' });
   }
 });
 

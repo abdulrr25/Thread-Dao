@@ -2,10 +2,11 @@
   "name": "threaddao-backend",
   "version": "1.0.0",
   "description": "ThreadDAO Backend API",
+  "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "dev": "node --loader ts-node/esm src/index.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
     "test": "jest"
@@ -38,7 +39,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
     "eslint": "^8.56.0",
-    "ts-node-dev": "^2.0.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }
