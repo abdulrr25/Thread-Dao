@@ -1,181 +1,215 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import { Logger } from './logger';
 
-interface DatabaseConfig {
-  url: string;
-  logQueries: boolean;
-  logErrors: boolean;
-}
-
-interface SecurityConfig {
-  jwtSecret: string;
-  jwtExpiresIn: string;
-  saltRounds: number;
-  corsOrigin: string[];
-}
-
-interface ServerConfig {
-  port: number;
-  host: string;
-  env: string;
-  baseUrl: string;
-}
-
-interface RedisConfig {
-  url: string;
-  ttl: number;
-}
-
-interface EmailConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  auth: {
-    user: string;
-    pass: string;
-  };
-  from: string;
-}
-
-interface Config {
-  database: DatabaseConfig;
-  security: SecurityConfig;
-  server: ServerConfig;
-  redis: RedisConfig;
-  email: EmailConfig;
+interface ConfigOptions {
+  env?: string;
+  configDir?: string;
+  configFile?: string;
 }
 
 export class ConfigManager {
   private static instance: ConfigManager;
-  private config: Config;
   private logger: Logger;
+  private config: Record<string, any>;
+  private defaultOptions: ConfigOptions = {
+    env: process.env.NODE_ENV || 'development',
+    configDir: 'config',
+    configFile: 'config.json',
+  };
 
-  private constructor() {
+  private constructor(options: ConfigOptions = {}) {
     this.logger = Logger.getInstance();
-    dotenv.config();
-    this.config = this.loadConfig();
+    this.config = this.loadConfig(options);
   }
 
-  public static getInstance(): ConfigManager {
+  public static getInstance(options?: ConfigOptions): ConfigManager {
     if (!ConfigManager.instance) {
-      ConfigManager.instance = new ConfigManager();
+      ConfigManager.instance = new ConfigManager(options);
     }
     return ConfigManager.instance;
   }
 
-  private loadConfig(): Config {
-    return {
-      database: {
-        url: this.getRequiredEnv('DATABASE_URL'),
-        logQueries: this.getBoolEnv('DATABASE_LOG_QUERIES', true),
-        logErrors: this.getBoolEnv('DATABASE_LOG_ERRORS', true),
-      },
-      security: {
-        jwtSecret: this.getRequiredEnv('JWT_SECRET'),
-        jwtExpiresIn: this.getEnv('JWT_EXPIRES_IN', '1d'),
-        saltRounds: this.getIntEnv('SALT_ROUNDS', 10),
-        corsOrigin: this.getArrayEnv('CORS_ORIGIN', ['http://localhost:3000']),
-      },
-      server: {
-        port: this.getIntEnv('PORT', 3000),
-        host: this.getEnv('HOST', 'localhost'),
-        env: this.getEnv('NODE_ENV', 'development'),
-        baseUrl: this.getEnv('BASE_URL', 'http://localhost:3000'),
-      },
-      redis: {
-        url: this.getRequiredEnv('REDIS_URL'),
-        ttl: this.getIntEnv('REDIS_TTL', 3600),
-      },
-      email: {
-        host: this.getRequiredEnv('EMAIL_HOST'),
-        port: this.getIntEnv('EMAIL_PORT', 587),
-        secure: this.getBoolEnv('EMAIL_SECURE', false),
-        auth: {
-          user: this.getRequiredEnv('EMAIL_USER'),
-          pass: this.getRequiredEnv('EMAIL_PASS'),
-        },
-        from: this.getRequiredEnv('EMAIL_FROM'),
-      },
-    };
-  }
-
-  private getEnv(key: string, defaultValue: string): string {
-    return process.env[key] || defaultValue;
-  }
-
-  private getRequiredEnv(key: string): string {
-    const value = process.env[key];
-    if (!value) {
-      this.logger.error(`Missing required environment variable: ${key}`);
-      throw new Error(`Missing required environment variable: ${key}`);
-    }
-    return value;
-  }
-
-  private getIntEnv(key: string, defaultValue: number): number {
-    const value = process.env[key];
-    if (!value) {
-      return defaultValue;
-    }
-    const parsed = parseInt(value, 10);
-    if (isNaN(parsed)) {
-      this.logger.warn(
-        `Invalid integer environment variable: ${key}, using default: ${defaultValue}`
+  private loadConfig(options: ConfigOptions = {}): Record<string, any> {
+    try {
+      const mergedOptions = { ...this.defaultOptions, ...options };
+      const envFile = `.env.${mergedOptions.env}`;
+      const configPath = path.resolve(
+        process.cwd(),
+        mergedOptions.configDir || '',
+        mergedOptions.configFile || ''
       );
+
+      // Load environment variables
+      dotenv.config({ path: envFile });
+      dotenv.config();
+
+      // Load configuration file
+      const config = require(configPath);
+
+      // Merge environment variables with config
+      const mergedConfig = {
+        ...config,
+        env: mergedOptions.env,
+        port: process.env.PORT || config.port || 3000,
+        host: process.env.HOST || config.host || 'localhost',
+        database: {
+          ...config.database,
+          url: process.env.DATABASE_URL || config.database?.url,
+        },
+        jwt: {
+          ...config.jwt,
+          secret: process.env.JWT_SECRET || config.jwt?.secret,
+          expiresIn: process.env.JWT_EXPIRES_IN || config.jwt?.expiresIn,
+        },
+        cors: {
+          ...config.cors,
+          origin: process.env.CORS_ORIGIN || config.cors?.origin,
+        },
+        logging: {
+          ...config.logging,
+          level: process.env.LOG_LEVEL || config.logging?.level,
+        },
+        rateLimit: {
+          ...config.rateLimit,
+          windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '') || config.rateLimit?.windowMs,
+          max: parseInt(process.env.RATE_LIMIT_MAX || '') || config.rateLimit?.max,
+        },
+        cache: {
+          ...config.cache,
+          ttl: parseInt(process.env.CACHE_TTL || '') || config.cache?.ttl,
+        },
+        ai: {
+          ...config.ai,
+          apiKey: process.env.AI_API_KEY || config.ai?.apiKey,
+          model: process.env.AI_MODEL || config.ai?.model,
+        },
+        websocket: {
+          ...config.websocket,
+          path: process.env.WS_PATH || config.websocket?.path,
+        },
+      };
+
+      this.logger.info('Configuration loaded', { env: mergedOptions.env });
+      return mergedConfig;
+    } catch (error) {
+      this.logger.error('Error loading configuration:', error);
+      throw error;
+    }
+  }
+
+  public get<T = any>(key: string, defaultValue?: T): T {
+    try {
+      const value = key.split('.').reduce((obj, k) => obj?.[k], this.config);
+      return value !== undefined ? value : defaultValue;
+    } catch (error) {
+      this.logger.error('Error getting configuration value:', { key, error });
       return defaultValue;
     }
-    return parsed;
   }
 
-  private getBoolEnv(key: string, defaultValue: boolean): boolean {
-    const value = process.env[key];
-    if (!value) {
-      return defaultValue;
+  public set<T = any>(key: string, value: T): void {
+    try {
+      const keys = key.split('.');
+      const lastKey = keys.pop();
+      const obj = keys.reduce((o, k) => (o[k] = o[k] || {}), this.config);
+      if (lastKey) {
+        obj[lastKey] = value;
+      }
+    } catch (error) {
+      this.logger.error('Error setting configuration value:', { key, value, error });
+      throw error;
     }
-    return value.toLowerCase() === 'true';
   }
 
-  private getArrayEnv(key: string, defaultValue: string[]): string[] {
-    const value = process.env[key];
-    if (!value) {
-      return defaultValue;
+  public has(key: string): boolean {
+    try {
+      return key.split('.').reduce((obj, k) => obj?.[k], this.config) !== undefined;
+    } catch (error) {
+      this.logger.error('Error checking configuration key:', { key, error });
+      return false;
     }
-    return value.split(',').map((item) => item.trim());
   }
 
-  public getConfig(): Config {
-    return this.config;
+  public delete(key: string): void {
+    try {
+      const keys = key.split('.');
+      const lastKey = keys.pop();
+      const obj = keys.reduce((o, k) => o?.[k], this.config);
+      if (obj && lastKey) {
+        delete obj[lastKey];
+      }
+    } catch (error) {
+      this.logger.error('Error deleting configuration key:', { key, error });
+      throw error;
+    }
   }
 
-  public getDatabaseConfig(): DatabaseConfig {
-    return this.config.database;
-  }
-
-  public getSecurityConfig(): SecurityConfig {
-    return this.config.security;
-  }
-
-  public getServerConfig(): ServerConfig {
-    return this.config.server;
-  }
-
-  public getRedisConfig(): RedisConfig {
-    return this.config.redis;
-  }
-
-  public getEmailConfig(): EmailConfig {
-    return this.config.email;
+  public getEnv(): string {
+    return this.get('env', 'development');
   }
 
   public isDevelopment(): boolean {
-    return this.config.server.env === 'development';
+    return this.getEnv() === 'development';
   }
 
   public isProduction(): boolean {
-    return this.config.server.env === 'production';
+    return this.getEnv() === 'production';
   }
 
   public isTest(): boolean {
-    return this.config.server.env === 'test';
+    return this.getEnv() === 'test';
+  }
+
+  public getPort(): number {
+    return this.get('port', 3000);
+  }
+
+  public getHost(): string {
+    return this.get('host', 'localhost');
+  }
+
+  public getDatabaseUrl(): string {
+    return this.get('database.url');
+  }
+
+  public getJwtSecret(): string {
+    return this.get('jwt.secret');
+  }
+
+  public getJwtExpiresIn(): string {
+    return this.get('jwt.expiresIn', '1d');
+  }
+
+  public getCorsOrigin(): string | string[] {
+    return this.get('cors.origin', '*');
+  }
+
+  public getLogLevel(): string {
+    return this.get('logging.level', 'info');
+  }
+
+  public getRateLimitWindowMs(): number {
+    return this.get('rateLimit.windowMs', 15 * 60 * 1000);
+  }
+
+  public getRateLimitMax(): number {
+    return this.get('rateLimit.max', 100);
+  }
+
+  public getCacheTtl(): number {
+    return this.get('cache.ttl', 3600);
+  }
+
+  public getAiApiKey(): string {
+    return this.get('ai.apiKey');
+  }
+
+  public getAiModel(): string {
+    return this.get('ai.model', 'gpt-4');
+  }
+
+  public getWsPath(): string {
+    return this.get('websocket.path', '/ws');
   }
 } 

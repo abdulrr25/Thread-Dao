@@ -1,126 +1,143 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useWallet } from './WalletContext';
-import { useToast } from '@/components/ui/use-toast';
-import { apiService } from '@/services/api';
-import { UserProfile } from '@/types/api';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { authService } from '@/services/auth';
+import { toast } from '@/components/ui/use-toast';
+import { User } from '@/types';
 
 interface AuthContextType {
-  user: UserProfile | null;
-  token: string | null;
+  user: User | null;
+  isAuthenticated: boolean;
   isLoading: boolean;
-  isAuthenticating: boolean;
-  connect: () => Promise<void>;
-  disconnect: () => void;
-  refreshUser: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshToken: () => Promise<void>;
+}
+
+interface RegisterData {
+  name: string;
+  handle: string;
+  email: string;
+  password: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const { address, isConnected } = useWallet();
-  const { toast } = useToast();
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [user, setUser] = useState<User | null>(null);
 
-  const refreshUser = async () => {
-    if (!token) return;
-    try {
-      const userProfile = await apiService.getUserProfile(address!);
-      setUser(userProfile);
-    } catch (error) {
-      console.error('Error refreshing user profile:', error);
-      disconnect();
-    }
-  };
+  // Check if user is authenticated
+  const { data: currentUser, isLoading } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: authService.getCurrentUser,
+    retry: false,
+    onError: () => {
+      setUser(null);
+    },
+  });
 
+  // Update user state when currentUser changes
   useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-      refreshUser();
-    } else {
-      setIsLoading(false);
+    if (currentUser) {
+      setUser(currentUser);
     }
-  }, []);
+  }, [currentUser]);
 
-  const connect = async () => {
-    if (!address || !isConnected) {
+  // Login mutation
+  const loginMutation = useMutation({
+    mutationFn: authService.login,
+    onSuccess: (data) => {
+      setUser(data.user);
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      navigate('/app');
       toast({
-        title: "Error",
-        description: "Please connect your wallet first",
-        variant: "destructive",
+        title: 'Success',
+        description: 'Logged in successfully',
       });
-      return;
-    }
-
-    try {
-      setIsAuthenticating(true);
-      const message = `Sign this message to connect to ThreadDAO (${new Date().toISOString()})`;
-      
-      // Request signature from MetaMask
-      const signature = await window.ethereum.request({
-        method: 'personal_sign',
-        params: [message, address],
-      });
-
-      const response = await apiService.post('/users/auth/connect', {
-        walletAddress: address,
-        signature,
-        message,
-      });
-
-      const { token: newToken, user: newUser } = response.data;
-      localStorage.setItem('token', newToken);
-      setToken(newToken);
-      setUser(newUser);
+    },
+    onError: (error: any) => {
       toast({
-        title: "Success",
-        description: "Successfully connected!",
+        title: 'Error',
+        description: error.message || 'Failed to login',
+        variant: 'destructive',
       });
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
+    },
+  });
+
+  // Register mutation
+  const registerMutation = useMutation({
+    mutationFn: authService.register,
+    onSuccess: (data) => {
+      setUser(data.user);
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      navigate('/app');
       toast({
-        title: "Error",
-        description: "Failed to connect wallet. Please try again.",
-        variant: "destructive",
+        title: 'Success',
+        description: 'Registered successfully',
       });
-    } finally {
-      setIsAuthenticating(false);
-    }
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to register',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Logout mutation
+  const logoutMutation = useMutation({
+    mutationFn: authService.logout,
+    onSuccess: () => {
+      setUser(null);
+      queryClient.clear();
+      navigate('/');
+      toast({
+        title: 'Success',
+        description: 'Logged out successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to logout',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  // Refresh token mutation
+  const refreshTokenMutation = useMutation({
+    mutationFn: authService.refreshToken,
+    onSuccess: (data) => {
+      setUser(data.user);
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+    },
+    onError: () => {
+      setUser(null);
+      navigate('/login');
+    },
+  });
+
+  const value = {
+    user,
+    isAuthenticated: !!user,
+    isLoading,
+    login: (email: string, password: string) => loginMutation.mutateAsync({ email, password }),
+    register: (data: RegisterData) => registerMutation.mutateAsync(data),
+    logout: () => logoutMutation.mutateAsync(),
+    refreshToken: () => refreshTokenMutation.mutateAsync(),
   };
 
-  const disconnect = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-    toast({
-      title: "Disconnected",
-      description: "You have been disconnected successfully",
-    });
-  };
-
-  return (
-    <AuthContext.Provider 
-      value={{ 
-        user, 
-        token, 
-        isLoading, 
-        isAuthenticating,
-        connect, 
-        disconnect,
-        refreshUser 
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

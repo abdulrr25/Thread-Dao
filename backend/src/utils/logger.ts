@@ -1,94 +1,183 @@
 import winston from 'winston';
-import { format } from 'winston';
+import { ConfigManager } from './config';
 
-const { combine, timestamp, printf, colorize } = format;
-
-interface LoggerOptions {
+interface LogOptions {
   level?: string;
-  filename?: string;
+  format?: winston.Logform.Format;
+  transports?: winston.transport[];
+  defaultMeta?: Record<string, any>;
 }
 
 export class Logger {
   private static instance: Logger;
   private logger: winston.Logger;
-
-  private constructor(options: LoggerOptions = {}) {
-    const { level = 'info', filename } = options;
-
-    const logFormat = printf(({ level, message, timestamp, ...metadata }) => {
-      let msg = `${timestamp} [${level}]: ${message}`;
-      if (Object.keys(metadata).length > 0) {
-        msg += ` ${JSON.stringify(metadata)}`;
-      }
-      return msg;
-    });
-
-    const transports: winston.transport[] = [
+  private config: ConfigManager;
+  private defaultOptions: LogOptions = {
+    level: 'info',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.json()
+    ),
+    transports: [
       new winston.transports.Console({
-        format: combine(colorize(), timestamp(), logFormat),
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        ),
       }),
-    ];
+      new winston.transports.File({
+        filename: 'logs/error.log',
+        level: 'error',
+      }),
+      new winston.transports.File({
+        filename: 'logs/combined.log',
+      }),
+    ],
+    defaultMeta: { service: 'thread-dao-api' },
+  };
 
-    if (filename) {
-      transports.push(
-        new winston.transports.File({
-          filename,
-          format: combine(timestamp(), logFormat),
-        })
-      );
-    }
-
-    this.logger = winston.createLogger({
-      level,
-      format: combine(timestamp(), logFormat),
-      transports,
-    });
+  private constructor() {
+    this.config = ConfigManager.getInstance();
+    this.logger = this.createLogger();
   }
 
-  public static getInstance(options?: LoggerOptions): Logger {
+  public static getInstance(): Logger {
     if (!Logger.instance) {
-      Logger.instance = new Logger(options);
+      Logger.instance = new Logger();
     }
     return Logger.instance;
   }
 
-  public error(message: string, meta?: any): void {
-    this.logger.error(message, meta);
+  private createLogger(options: LogOptions = {}): winston.Logger {
+    const mergedOptions = { ...this.defaultOptions, ...options };
+    return winston.createLogger(mergedOptions);
   }
 
-  public warn(message: string, meta?: any): void {
-    this.logger.warn(message, meta);
+  public error(message: string, meta?: Record<string, any>): void {
+    this.logger.error(message, { ...meta });
   }
 
-  public info(message: string, meta?: any): void {
-    this.logger.info(message, meta);
+  public warn(message: string, meta?: Record<string, any>): void {
+    this.logger.warn(message, { ...meta });
   }
 
-  public debug(message: string, meta?: any): void {
-    this.logger.debug(message, meta);
+  public info(message: string, meta?: Record<string, any>): void {
+    this.logger.info(message, { ...meta });
   }
 
-  public http(message: string, meta?: any): void {
-    this.logger.http(message, meta);
+  public debug(message: string, meta?: Record<string, any>): void {
+    this.logger.debug(message, { ...meta });
   }
 
-  public verbose(message: string, meta?: any): void {
-    this.logger.verbose(message, meta);
+  public http(message: string, meta?: Record<string, any>): void {
+    this.logger.http(message, { ...meta });
   }
 
-  public silly(message: string, meta?: any): void {
-    this.logger.silly(message, meta);
+  public verbose(message: string, meta?: Record<string, any>): void {
+    this.logger.verbose(message, { ...meta });
   }
 
-  public log(level: string, message: string, meta?: any): void {
-    this.logger.log(level, message, meta);
+  public silly(message: string, meta?: Record<string, any>): void {
+    this.logger.silly(message, { ...meta });
   }
 
-  public stream(): { write: (message: string) => void } {
-    return {
-      write: (message: string) => {
-        this.info(message.trim());
+  public log(level: string, message: string, meta?: Record<string, any>): void {
+    this.logger.log(level, message, { ...meta });
+  }
+
+  public addTransport(transport: winston.transport): void {
+    this.logger.add(transport);
+  }
+
+  public removeTransport(transport: winston.transport): void {
+    this.logger.remove(transport);
+  }
+
+  public setLevel(level: string): void {
+    this.logger.level = level;
+  }
+
+  public getLevel(): string {
+    return this.logger.level;
+  }
+
+  public getLogger(): winston.Logger {
+    return this.logger;
+  }
+
+  public createChildLogger(options: LogOptions = {}): winston.Logger {
+    return this.logger.child(options);
+  }
+
+  public createRequestLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'request',
       },
-    };
+    });
+  }
+
+  public createErrorLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'error',
+      },
+    });
+  }
+
+  public createAccessLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'access',
+      },
+    });
+  }
+
+  public createAuditLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'audit',
+      },
+    });
+  }
+
+  public createSecurityLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'security',
+      },
+    });
+  }
+
+  public createPerformanceLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'performance',
+      },
+    });
+  }
+
+  public createBusinessLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'business',
+      },
+    });
+  }
+
+  public createSystemLogger(): winston.Logger {
+    return this.createChildLogger({
+      defaultMeta: {
+        service: 'thread-dao-api',
+        type: 'system',
+      },
+    });
   }
 } 

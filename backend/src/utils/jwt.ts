@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { envVars } from '../lib/env';
-import { ApiError } from './ApiError';
+import { ApiError } from './error';
 
 interface TokenPayload {
   id: string;

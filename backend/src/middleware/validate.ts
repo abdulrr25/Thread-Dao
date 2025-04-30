@@ -1,25 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError } from 'zod';
-import { ValidationError } from '../lib/errors';
-import { logger } from '../lib/logger';
-import { ApiError } from '../utils/ApiError';
-import { Schema } from 'joi';
+import { z, AnyZodObject, ZodError } from 'zod';
+import { ApiError } from '../utils/error';
+import { logger } from '../utils/logger';
 
-export const validate = (schema: Schema) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const { error } = schema.validate(req.body, {
-      abortEarly: false,
-      stripUnknown: true
-    });
-
-    if (error) {
-      const errorMessage = error.details
-        .map((detail) => detail.message)
-        .join(', ');
-      return next(new ApiError(400, errorMessage));
+export const validate = (schema: AnyZodObject) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await schema.parseAsync({
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      });
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const errorMessage = error.errors
+          .map((err) => err.message)
+          .join(', ');
+        return next(new ApiError(400, errorMessage));
+      }
+      next(error);
     }
-
-    next();
   };
 };
 

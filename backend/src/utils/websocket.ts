@@ -1,30 +1,42 @@
 import { Server } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import { NotificationManager } from './notification';
+import { Logger } from './logger';
+import { ConfigManager } from './config';
 import { ApiError } from './error';
+import { verify } from 'jsonwebtoken';
 
 interface WebSocketUser {
-  userId: string;
+  id: string;
   socketId: string;
-  daos: string[];
+  rooms: Set<string>;
+}
+
+interface WebSocketMessage {
+  type: string;
+  data: any;
+  timestamp: number;
 }
 
 export class WebSocketManager {
   private static instance: WebSocketManager;
+  private logger: Logger;
+  private config: ConfigManager;
   private io: Server;
   private users: Map<string, WebSocketUser>;
-  private notificationManager: NotificationManager;
 
   private constructor(server: HttpServer) {
+    this.logger = Logger.getInstance();
+    this.config = ConfigManager.getInstance();
+    this.users = new Map();
+
     this.io = new Server(server, {
+      path: this.config.get('websocket.path', '/ws'),
       cors: {
-        origin: process.env.FRONTEND_URL,
+        origin: this.config.get('cors.origin', '*'),
         methods: ['GET', 'POST'],
-        credentials: true,
       },
     });
-    this.users = new Map();
-    this.notificationManager = NotificationManager.getInstance();
+
     this.setupEventHandlers();
   }
 
@@ -37,166 +49,145 @@ export class WebSocketManager {
 
   private setupEventHandlers(): void {
     this.io.on('connection', (socket) => {
-      console.log('New client connected:', socket.id);
+      this.logger.info('WebSocket client connected', { socketId: socket.id });
 
-      // Handle user authentication
-      socket.on('authenticate', async (data: { userId: string; daos: string[] }) => {
+      socket.on('authenticate', async (token: string) => {
         try {
-          this.users.set(socket.id, {
-            userId: data.userId,
+          const decoded = verify(token, this.config.get('jwt.secret'));
+          const userId = (decoded as any).id;
+
+          this.users.set(userId, {
+            id: userId,
             socketId: socket.id,
-            daos: data.daos,
+            rooms: new Set(),
           });
 
-          // Join DAO rooms
-          data.daos.forEach((daoId) => {
-            socket.join(`dao:${daoId}`);
-          });
-
-          // Join user's personal room
-          socket.join(`user:${data.userId}`);
-
-          socket.emit('authenticated', { success: true });
+          socket.emit('authenticated', { userId });
+          this.logger.info('WebSocket client authenticated', { userId, socketId: socket.id });
         } catch (error) {
-          console.error('Authentication error:', error);
+          this.logger.error('WebSocket authentication error:', error);
           socket.emit('error', { message: 'Authentication failed' });
         }
       });
 
-      // Handle DAO chat messages
-      socket.on('chat:message', async (data: {
-        daoId: string;
-        message: string;
-        type: 'text' | 'image' | 'file';
-        metadata?: any;
-      }) => {
-        try {
-          const user = this.users.get(socket.id);
-          if (!user) {
-            throw new Error('User not authenticated');
-          }
-
-          const messageData = {
-            id: Date.now().toString(),
-            daoId: data.daoId,
-            userId: user.userId,
-            message: data.message,
-            type: data.type,
-            metadata: data.metadata,
-            timestamp: new Date(),
-          };
-
-          // Broadcast to DAO room
-          this.io.to(`dao:${data.daoId}`).emit('chat:message', messageData);
-
-          // Store message in database (to be implemented)
-          // await this.storeMessage(messageData);
-        } catch (error) {
-          console.error('Chat message error:', error);
-          socket.emit('error', { message: 'Failed to send message' });
+      socket.on('join', (room: string) => {
+        const user = this.getUserBySocketId(socket.id);
+        if (user) {
+          socket.join(room);
+          user.rooms.add(room);
+          this.logger.info('WebSocket client joined room', { userId: user.id, room });
         }
       });
 
-      // Handle proposal updates
-      socket.on('proposal:update', async (data: {
-        daoId: string;
-        proposalId: string;
-        status: 'created' | 'voting' | 'executed' | 'rejected';
-        metadata?: any;
-      }) => {
-        try {
-          const user = this.users.get(socket.id);
-          if (!user) {
-            throw new Error('User not authenticated');
-          }
+      socket.on('leave', (room: string) => {
+        const user = this.getUserBySocketId(socket.id);
+        if (user) {
+          socket.leave(room);
+          user.rooms.delete(room);
+          this.logger.info('WebSocket client left room', { userId: user.id, room });
+        }
+      });
 
-          const updateData = {
-            daoId: data.daoId,
-            proposalId: data.proposalId,
-            status: data.status,
-            metadata: data.metadata,
-            timestamp: new Date(),
-          };
+      socket.on('message', (message: WebSocketMessage) => {
+        const user = this.getUserBySocketId(socket.id);
+        if (user) {
+          this.broadcastToRoom(message.type, message.data, Array.from(user.rooms));
+          this.logger.info('WebSocket message sent', {
+            userId: user.id,
+            type: message.type,
+            rooms: Array.from(user.rooms),
+          });
+        }
+      });
 
-          // Broadcast to DAO room
-          this.io.to(`dao:${data.daoId}`).emit('proposal:update', updateData);
+      socket.on('disconnect', () => {
+        const user = this.getUserBySocketId(socket.id);
+        if (user) {
+          this.users.delete(user.id);
+          this.logger.info('WebSocket client disconnected', { userId: user.id });
+        }
+      });
+    });
+  }
 
-          // Send notifications to DAO members
-          await this.notificationManager.sendDAONotification(
-            data.daoId,
-            'proposal_update',
-            `Proposal ${data.proposalId} status updated to ${data.status}`,
-            updateData
-          );
-  private findUserIdBySocketId(socketId: string): string | undefined {
-    for (const [userId, user] of this.connectedUsers.entries()) {
-      if (user.socketId === socketId) {
-        return userId;
+  private getUserBySocketId(socketId: string): WebSocketUser | undefined {
+    return Array.from(this.users.values()).find((user) => user.socketId === socketId);
+  }
+
+  public broadcastToRoom(type: string, data: any, rooms: string[]): void {
+    const message: WebSocketMessage = {
+      type,
+      data,
+      timestamp: Date.now(),
+    };
+
+    rooms.forEach((room) => {
+      this.io.to(room).emit(type, message);
+    });
+  }
+
+  public sendToUser(userId: string, type: string, data: any): void {
+    const user = this.users.get(userId);
+    if (user) {
+      const message: WebSocketMessage = {
+        type,
+        data,
+        timestamp: Date.now(),
+      };
+      this.io.to(user.socketId).emit(type, message);
+    }
+  }
+
+  public sendToUsers(userIds: string[], type: string, data: any): void {
+    userIds.forEach((userId) => this.sendToUser(userId, type, data));
+  }
+
+  public broadcastToAll(type: string, data: any): void {
+    const message: WebSocketMessage = {
+      type,
+      data,
+      timestamp: Date.now(),
+    };
+    this.io.emit(type, message);
+  }
+
+  public getConnectedUsers(): string[] {
+    return Array.from(this.users.keys());
+  }
+
+  public getUserRooms(userId: string): string[] {
+    const user = this.users.get(userId);
+    return user ? Array.from(user.rooms) : [];
+  }
+
+  public isUserConnected(userId: string): boolean {
+    return this.users.has(userId);
+  }
+
+  public getRoomUsers(room: string): string[] {
+    const roomUsers = new Set<string>();
+    this.users.forEach((user) => {
+      if (user.rooms.has(room)) {
+        roomUsers.add(user.id);
       }
-    }
-    return undefined;
+    });
+    return Array.from(roomUsers);
   }
 
-  public async sendNotification(userId: string, notification: {
-    type: string;
-    title: string;
-    message: string;
-    data?: Record<string, any>;
-  }): Promise<void> {
-    try {
-      const user = this.connectedUsers.get(userId);
-      if (user) {
-        const createdNotification = await this.notificationManager.createNotification({
-          userId,
-          type: notification.type as any,
-          title: notification.title,
-          message: notification.message,
-          data: notification.data,
-        });
-        this.io.to(user.socketId).emit('notification', createdNotification);
-      }
-    } catch (error) {
-      console.error('Error sending notification:', error);
-      throw new ApiError(500, 'Failed to send notification');
+  public disconnectUser(userId: string): void {
+    const user = this.users.get(userId);
+    if (user) {
+      this.io.sockets.sockets.get(user.socketId)?.disconnect();
+      this.users.delete(userId);
     }
   }
 
-  public async broadcastToDAO(daoId: string, event: string, data: any): Promise<void> {
-    try {
-      this.io.to(`dao:${daoId}`).emit(event, data);
-    } catch (error) {
-      console.error('Error broadcasting to DAO:', error);
-      throw new ApiError(500, 'Failed to broadcast to DAO');
-    }
+  public disconnectAll(): void {
+    this.io.disconnectSockets();
+    this.users.clear();
   }
 
-  public async joinDAO(userId: string, daoId: string): Promise<void> {
-    try {
-      const user = this.connectedUsers.get(userId);
-      if (user) {
-        this.io.sockets.sockets.get(user.socketId)?.join(`dao:${daoId}`);
-        console.log(`User ${userId} joined DAO ${daoId}`);
-      }
-    } catch (error) {
-      console.error('Error joining DAO:', error);
-      throw new ApiError(500, 'Failed to join DAO');
-    }
-  }
-
-  public async leaveDAO(userId: string, daoId: string): Promise<void> {
-    try {
-      const user = this.connectedUsers.get(userId);
-      if (user) {
-        this.io.sockets.sockets.get(user.socketId)?.leave(`dao:${daoId}`);
-        console.log(`User ${userId} left DAO ${daoId}`);
-      }
-    } catch (error) {
-      console.error('Error leaving DAO:', error);
-      throw new ApiError(500, 'Failed to leave DAO');
-    }
-  }
-
-  public getConnectedUsers(): number {
-    return this.connectedUsers.size;
+  public getServer(): Server {
+    return this.io;
   }
 } 

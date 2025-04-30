@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { catchAsync } from '../utils/catchAsync';
-import { ApiError } from '../utils/ApiError';
+import { ApiError } from '../utils/error';
 import { DAO } from '../models/dao.model';
 import { Proposal } from '../models/proposal.model';
 import { Vote } from '../models/vote.model';

@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { hash, compare } from 'bcryptjs';
 import { signToken, verifyToken } from '../utils/jwt';
-import { ApiError } from '../utils/ApiError';
+import { ApiError } from '../utils/error';
 import { logger } from '../utils/logger';
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {

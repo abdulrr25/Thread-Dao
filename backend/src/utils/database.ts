@@ -1,180 +1,290 @@
 import { PrismaClient } from '@prisma/client';
-import { ApiError } from './error';
 import { Logger } from './logger';
-
-interface DatabaseOptions {
-  logQueries?: boolean;
-  logErrors?: boolean;
-}
+import { ConfigManager } from './config';
+import { ApiError } from './error';
 
 export class Database {
   private static instance: Database;
-  private prisma: PrismaClient;
   private logger: Logger;
-  private logQueries: boolean;
-  private logErrors: boolean;
+  private config: ConfigManager;
+  private client: PrismaClient;
 
-  private constructor(options: DatabaseOptions = {}) {
+  private constructor() {
     this.logger = Logger.getInstance();
-    this.logQueries = options.logQueries ?? true;
-    this.logErrors = options.logErrors ?? true;
-
-    this.prisma = new PrismaClient({
-      log: this.logQueries
-        ? [
-            {
-              emit: 'event',
-              level: 'query',
-            },
-            {
-              emit: 'event',
-              level: 'error',
-            },
-            {
-              emit: 'event',
-              level: 'info',
-            },
-            {
-              emit: 'event',
-              level: 'warn',
-            },
-          ]
-        : [],
+    this.config = ConfigManager.getInstance();
+    this.client = new PrismaClient({
+      log: [
+        {
+          emit: 'event',
+          level: 'query',
+        },
+        {
+          emit: 'event',
+          level: 'error',
+        },
+        {
+          emit: 'event',
+          level: 'info',
+        },
+        {
+          emit: 'event',
+          level: 'warn',
+        },
+      ],
     });
 
-    if (this.logQueries) {
-      this.prisma.$on('query', (e) => {
-        this.logger.debug('Query:', {
-          query: e.query,
-          params: e.params,
-          duration: e.duration,
-        });
-      });
-    }
-
-    if (this.logErrors) {
-      this.prisma.$on('error', (e) => {
-        this.logger.error('Database error:', e);
-      });
-    }
+    this.setupEventHandlers();
   }
 
-  public static getInstance(options?: DatabaseOptions): Database {
+  public static getInstance(): Database {
     if (!Database.instance) {
-      Database.instance = new Database(options);
+      Database.instance = new Database();
     }
     return Database.instance;
   }
 
-  public getPrisma(): PrismaClient {
-    return this.prisma;
+  private setupEventHandlers(): void {
+    this.client.$on('query', (e: any) => {
+      this.logger.debug('Query:', {
+        query: e.query,
+        params: e.params,
+        duration: e.duration,
+      });
+    });
+
+    this.client.$on('error', (e: any) => {
+      this.logger.error('Database error:', {
+        error: e.message,
+        target: e.target,
+      });
+    });
+
+    this.client.$on('info', (e: any) => {
+      this.logger.info('Database info:', {
+        message: e.message,
+        target: e.target,
+      });
+    });
+
+    this.client.$on('warn', (e: any) => {
+      this.logger.warn('Database warning:', {
+        message: e.message,
+        target: e.target,
+      });
+    });
   }
 
   public async connect(): Promise<void> {
     try {
-      await this.prisma.$connect();
+      await this.client.$connect();
       this.logger.info('Database connected');
     } catch (error) {
       this.logger.error('Database connection error:', error);
-      throw new ApiError(500, 'Failed to connect to database');
+      throw new ApiError(500, 'Database connection failed');
     }
   }
 
   public async disconnect(): Promise<void> {
     try {
-      await this.prisma.$disconnect();
+      await this.client.$disconnect();
       this.logger.info('Database disconnected');
     } catch (error) {
       this.logger.error('Database disconnection error:', error);
-      throw new ApiError(500, 'Failed to disconnect from database');
+      throw new ApiError(500, 'Database disconnection failed');
     }
   }
 
   public async transaction<T>(
-    fn: (prisma: PrismaClient) => Promise<T>
+    fn: (tx: PrismaClient) => Promise<T>
   ): Promise<T> {
     try {
-      return await this.prisma.$transaction(fn);
+      return await this.client.$transaction(fn);
     } catch (error) {
-      this.logger.error('Transaction error:', error);
-      throw new ApiError(500, 'Transaction failed');
+      this.logger.error('Database transaction error:', error);
+      throw new ApiError(500, 'Database transaction failed');
+    }
+  }
+
+  public async query<T>(
+    fn: (tx: PrismaClient) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await fn(this.client);
+    } catch (error) {
+      this.logger.error('Database query error:', error);
+      throw new ApiError(500, 'Database query failed');
+    }
+  }
+
+  public getClient(): PrismaClient {
+    return this.client;
+  }
+
+  public async healthCheck(): Promise<boolean> {
+    try {
+      await this.client.$queryRaw`SELECT 1`;
+      return true;
+    } catch (error) {
+      this.logger.error('Database health check failed:', error);
+      return false;
     }
   }
 
   public async executeRaw<T>(query: string, ...args: any[]): Promise<T> {
     try {
-      return await this.prisma.$executeRawUnsafe(query, ...args);
+      return await this.client.$executeRawUnsafe(query, ...args);
     } catch (error) {
-      this.logger.error('Execute raw query error:', error);
-      throw new ApiError(500, 'Failed to execute raw query');
+      this.logger.error('Database raw query error:', error);
+      throw new ApiError(500, 'Database raw query failed');
     }
   }
 
   public async queryRaw<T>(query: string, ...args: any[]): Promise<T> {
     try {
-      return await this.prisma.$queryRawUnsafe(query, ...args);
+      return await this.client.$queryRawUnsafe(query, ...args);
     } catch (error) {
-      this.logger.error('Query raw error:', error);
-      throw new ApiError(500, 'Failed to execute raw query');
+      this.logger.error('Database raw query error:', error);
+      throw new ApiError(500, 'Database raw query failed');
     }
   }
 
-  public async healthCheck(): Promise<boolean> {
+  public async create<T>(
+    model: string,
+    data: any,
+    include?: any
+  ): Promise<T> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return true;
+      return await (this.client as any)[model].create({
+        data,
+        include,
+      });
     } catch (error) {
-      this.logger.error('Health check error:', error);
-      return false;
+      this.logger.error('Database create error:', error);
+      throw new ApiError(500, 'Database create failed');
     }
   }
 
-  public async getMetrics(): Promise<any> {
+  public async findUnique<T>(
+    model: string,
+    where: any,
+    include?: any
+  ): Promise<T | null> {
     try {
-      return await this.prisma.$metrics.json();
+      return await (this.client as any)[model].findUnique({
+        where,
+        include,
+      });
     } catch (error) {
-      this.logger.error('Get metrics error:', error);
-      throw new ApiError(500, 'Failed to get database metrics');
+      this.logger.error('Database findUnique error:', error);
+      throw new ApiError(500, 'Database findUnique failed');
     }
   }
 
-  public async reset(): Promise<void> {
+  public async findFirst<T>(
+    model: string,
+    where: any,
+    include?: any
+  ): Promise<T | null> {
     try {
-      await this.prisma.$reset();
-      this.logger.info('Database reset');
+      return await (this.client as any)[model].findFirst({
+        where,
+        include,
+      });
     } catch (error) {
-      this.logger.error('Reset error:', error);
-      throw new ApiError(500, 'Failed to reset database');
+      this.logger.error('Database findFirst error:', error);
+      throw new ApiError(500, 'Database findFirst failed');
     }
   }
 
-  public async seed(): Promise<void> {
+  public async findMany<T>(
+    model: string,
+    where?: any,
+    include?: any,
+    orderBy?: any,
+    skip?: number,
+    take?: number
+  ): Promise<T[]> {
     try {
-      // Implement your seeding logic here
-      this.logger.info('Database seeded');
+      return await (this.client as any)[model].findMany({
+        where,
+        include,
+        orderBy,
+        skip,
+        take,
+      });
     } catch (error) {
-      this.logger.error('Seed error:', error);
-      throw new ApiError(500, 'Failed to seed database');
+      this.logger.error('Database findMany error:', error);
+      throw new ApiError(500, 'Database findMany failed');
     }
   }
 
-  public async backup(): Promise<void> {
+  public async update<T>(
+    model: string,
+    where: any,
+    data: any,
+    include?: any
+  ): Promise<T> {
     try {
-      // Implement your backup logic here
-      this.logger.info('Database backed up');
+      return await (this.client as any)[model].update({
+        where,
+        data,
+        include,
+      });
     } catch (error) {
-      this.logger.error('Backup error:', error);
-      throw new ApiError(500, 'Failed to backup database');
+      this.logger.error('Database update error:', error);
+      throw new ApiError(500, 'Database update failed');
     }
   }
 
-  public async restore(): Promise<void> {
+  public async delete<T>(
+    model: string,
+    where: any
+  ): Promise<T> {
     try {
-      // Implement your restore logic here
-      this.logger.info('Database restored');
+      return await (this.client as any)[model].delete({
+        where,
+      });
     } catch (error) {
-      this.logger.error('Restore error:', error);
-      throw new ApiError(500, 'Failed to restore database');
+      this.logger.error('Database delete error:', error);
+      throw new ApiError(500, 'Database delete failed');
+    }
+  }
+
+  public async count(
+    model: string,
+    where?: any
+  ): Promise<number> {
+    try {
+      return await (this.client as any)[model].count({
+        where,
+      });
+    } catch (error) {
+      this.logger.error('Database count error:', error);
+      throw new ApiError(500, 'Database count failed');
+    }
+  }
+
+  public async aggregate<T>(
+    model: string,
+    args: any
+  ): Promise<T> {
+    try {
+      return await (this.client as any)[model].aggregate(args);
+    } catch (error) {
+      this.logger.error('Database aggregate error:', error);
+      throw new ApiError(500, 'Database aggregate failed');
+    }
+  }
+
+  public async groupBy<T>(
+    model: string,
+    args: any
+  ): Promise<T[]> {
+    try {
+      return await (this.client as any)[model].groupBy(args);
+    } catch (error) {
+      this.logger.error('Database groupBy error:', error);
+      throw new ApiError(500, 'Database groupBy failed');
     }
   }
 } 

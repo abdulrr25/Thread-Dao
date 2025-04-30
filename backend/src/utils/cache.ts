@@ -1,4 +1,3 @@
-import Redis from 'ioredis';
 import { Logger } from './logger';
 import { ApiError } from './error';
 import { ConfigManager } from './config';
@@ -18,14 +17,14 @@ export class Cache {
   private static instance: Cache;
   private logger: Logger;
   private config: ConfigManager;
-  private client: Redis;
+  private cache: Map<string, CacheData<any>>;
   private defaultTTL: number = 3600; // 1 hour
   private defaultPrefix: string = 'cache:';
 
   private constructor() {
     this.logger = Logger.getInstance();
     this.config = ConfigManager.getInstance();
-    this.client = new Redis(this.config.get('redis.url'));
+    this.cache = new Map();
   }
 
   public static getInstance(): Cache {
@@ -35,21 +34,24 @@ export class Cache {
     return Cache.instance;
   }
 
+  private getFullKey(key: string, prefix?: string): string {
+    return `${prefix || this.defaultPrefix}${key}`;
+  }
+
   public async get<T>(key: string, options: CacheOptions = {}): Promise<T | null> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      const data = await this.client.get(fullKey);
+      const cacheData = this.cache.get(fullKey);
 
-      if (!data) {
+      if (!cacheData) {
         return null;
       }
 
-      const cacheData: CacheData<T> = JSON.parse(data);
       const now = Date.now();
 
       // Check if data is expired
       if (cacheData.ttl > 0 && now - cacheData.timestamp > cacheData.ttl * 1000) {
-        await this.del(key, options);
+        this.cache.delete(fullKey);
         return null;
       }
 
@@ -74,7 +76,7 @@ export class Cache {
         ttl,
       };
 
-      await this.client.set(fullKey, JSON.stringify(cacheData), 'EX', ttl);
+      this.cache.set(fullKey, cacheData);
     } catch (error) {
       this.logger.error('Cache set error:', error);
       throw new ApiError(500, 'Cache error');
@@ -84,7 +86,7 @@ export class Cache {
   public async del(key: string, options: CacheOptions = {}): Promise<void> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      await this.client.del(fullKey);
+      this.cache.delete(fullKey);
     } catch (error) {
       this.logger.error('Cache delete error:', error);
       throw new ApiError(500, 'Cache error');
@@ -94,8 +96,7 @@ export class Cache {
   public async exists(key: string, options: CacheOptions = {}): Promise<boolean> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      const exists = await this.client.exists(fullKey);
-      return exists === 1;
+      return this.cache.has(fullKey);
     } catch (error) {
       this.logger.error('Cache exists error:', error);
       throw new ApiError(500, 'Cache error');
@@ -105,7 +106,12 @@ export class Cache {
   public async ttl(key: string, options: CacheOptions = {}): Promise<number> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      return await this.client.ttl(fullKey);
+      const cacheData = this.cache.get(fullKey);
+      if (!cacheData) return -2;
+      if (cacheData.ttl === 0) return -1;
+      const now = Date.now();
+      const remaining = cacheData.ttl - (now - cacheData.timestamp) / 1000;
+      return Math.max(0, Math.floor(remaining));
     } catch (error) {
       this.logger.error('Cache ttl error:', error);
       throw new ApiError(500, 'Cache error');
@@ -114,10 +120,11 @@ export class Cache {
 
   public async flush(options: CacheOptions = {}): Promise<void> {
     try {
-      const pattern = this.getFullKey('*', options.prefix);
-      const keys = await this.client.keys(pattern);
-      if (keys.length > 0) {
-        await this.client.del(...keys);
+      const prefix = options.prefix || this.defaultPrefix;
+      for (const key of this.cache.keys()) {
+        if (key.startsWith(prefix)) {
+          this.cache.delete(key);
+        }
       }
     } catch (error) {
       this.logger.error('Cache flush error:', error);
@@ -128,7 +135,10 @@ export class Cache {
   public async increment(key: string, options: CacheOptions = {}): Promise<number> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      return await this.client.incr(fullKey);
+      const currentValue = await this.get<number>(key, options) || 0;
+      const newValue = currentValue + 1;
+      await this.set(key, newValue, options);
+      return newValue;
     } catch (error) {
       this.logger.error('Cache increment error:', error);
       throw new ApiError(500, 'Cache error');
@@ -138,7 +148,10 @@ export class Cache {
   public async decrement(key: string, options: CacheOptions = {}): Promise<number> {
     try {
       const fullKey = this.getFullKey(key, options.prefix);
-      return await this.client.decr(fullKey);
+      const currentValue = await this.get<number>(key, options) || 0;
+      const newValue = Math.max(0, currentValue - 1);
+      await this.set(key, newValue, options);
+      return newValue;
     } catch (error) {
       this.logger.error('Cache decrement error:', error);
       throw new ApiError(500, 'Cache error');
@@ -165,13 +178,9 @@ export class Cache {
     }
   }
 
-  private getFullKey(key: string, prefix?: string): string {
-    return `${prefix || this.defaultPrefix}${key}`;
-  }
-
   public async quit(): Promise<void> {
     try {
-      await this.client.quit();
+      this.cache.clear();
     } catch (error) {
       this.logger.error('Cache quit error:', error);
       throw new ApiError(500, 'Cache error');

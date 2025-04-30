@@ -1,7 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { envVars } from '../lib/env';
 import { logger } from '../lib/logger';
-import { ApiError } from '../utils/ApiError';
+import { ApiError } from '../utils/error';
 
 const rateLimitWindow = parseInt(envVars.RATE_LIMIT_WINDOW_MS);
 const rateLimitMax = parseInt(envVars.RATE_LIMIT_MAX);

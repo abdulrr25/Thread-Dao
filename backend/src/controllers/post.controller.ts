@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { catchAsync } from '../utils/catchAsync';
-import { ApiError } from '../utils/ApiError';
+import { ApiError } from '../utils/error';
 import { Post } from '../models/post.model';
 import { Comment } from '../models/comment.model';
 

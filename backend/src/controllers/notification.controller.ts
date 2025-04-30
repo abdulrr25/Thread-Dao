@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { catchAsync } from '../utils/catchAsync';
-import { ApiError } from '../utils/ApiError';
+import { ApiError } from '../utils/error';
 import { Notification } from '../models/notification.model';
 
 export const getNotifications = catchAsync(async (req: Request, res: Response) => {

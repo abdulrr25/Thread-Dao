@@ -40,97 +40,120 @@ export class Validator {
     return async (req: Request, res: Response, next: NextFunction) => {
       try {
         const mergedOptions = { ...this.defaultOptions, ...options };
-        const validationErrors: Record<string, any> = {};
 
         // Validate request body
         if (schema.body) {
           const { error, value } = schema.body.validate(req.body, mergedOptions);
           if (error) {
-            validationErrors.body = this.formatError(error);
-          } else {
-            req.body = value;
+            throw this.formatError(error);
           }
+          req.body = value;
         }
 
         // Validate query parameters
         if (schema.query) {
           const { error, value } = schema.query.validate(req.query, mergedOptions);
           if (error) {
-            validationErrors.query = this.formatError(error);
-          } else {
-            req.query = value;
+            throw this.formatError(error);
           }
+          req.query = value;
         }
 
         // Validate URL parameters
         if (schema.params) {
           const { error, value } = schema.params.validate(req.params, mergedOptions);
           if (error) {
-            validationErrors.params = this.formatError(error);
-          } else {
-            req.params = value;
+            throw this.formatError(error);
           }
+          req.params = value;
         }
 
         // Validate headers
         if (schema.headers) {
           const { error, value } = schema.headers.validate(req.headers, mergedOptions);
           if (error) {
-            validationErrors.headers = this.formatError(error);
-          } else {
-            req.headers = value;
+            throw this.formatError(error);
           }
-        }
-
-        // If there are validation errors, throw an error
-        if (Object.keys(validationErrors).length > 0) {
-          throw new ApiError(400, 'Validation Error', validationErrors);
+          req.headers = value;
         }
 
         next();
       } catch (error) {
-        this.logger.error('Validation error:', error);
         next(error);
       }
     };
   }
 
-  private formatError(error: Joi.ValidationError): Record<string, string[]> {
-    const formattedErrors: Record<string, string[]> = {};
-
-    error.details.forEach((detail) => {
-      const key = detail.path.join('.');
-      if (!formattedErrors[key]) {
-        formattedErrors[key] = [];
-      }
-      formattedErrors[key].push(detail.message);
-    });
-
-    return formattedErrors;
-  }
-
-  public createSchema<T>(schema: Joi.Schema<T>): Joi.Schema<T> {
-    return schema;
-  }
-
   public async validateAsync<T>(
-    schema: Joi.Schema<T>,
-    data: unknown,
+    data: T,
+    schema: Joi.Schema,
     options: ValidationOptions = {}
   ): Promise<T> {
     try {
       const mergedOptions = { ...this.defaultOptions, ...options };
       const { error, value } = await schema.validateAsync(data, mergedOptions);
-      
       if (error) {
-        throw new ApiError(400, 'Validation Error', this.formatError(error));
+        throw this.formatError(error);
       }
-
       return value;
     } catch (error) {
       this.logger.error('Validation error:', error);
       throw error;
     }
+  }
+
+  public async validatePartial<T>(
+    data: Partial<T>,
+    schema: Joi.Schema,
+    options: ValidationOptions = {}
+  ): Promise<Partial<T>> {
+    try {
+      const mergedOptions = { ...this.defaultOptions, ...options };
+      const { error, value } = await schema.validateAsync(data, {
+        ...mergedOptions,
+        stripUnknown: true,
+      });
+      if (error) {
+        throw this.formatError(error);
+      }
+      return value;
+    } catch (error) {
+      this.logger.error('Validation error:', error);
+      throw error;
+    }
+  }
+
+  public async validateArray<T>(
+    data: T[],
+    schema: Joi.Schema,
+    options: ValidationOptions = {}
+  ): Promise<T[]> {
+    try {
+      const mergedOptions = { ...this.defaultOptions, ...options };
+      const arraySchema = Joi.array().items(schema);
+      const { error, value } = await arraySchema.validateAsync(data, mergedOptions);
+      if (error) {
+        throw this.formatError(error);
+      }
+      return value;
+    } catch (error) {
+      this.logger.error('Validation error:', error);
+      throw error;
+    }
+  }
+
+  private formatError(error: Joi.ValidationError): ApiError {
+    const details = error.details.map((detail) => ({
+      field: detail.path.join('.'),
+      message: detail.message,
+    }));
+
+    this.logger.error('Validation error:', { details });
+    return new ApiError(400, 'Validation error', details);
+  }
+
+  public createSchema<T>(schema: Joi.Schema<T>): Joi.Schema<T> {
+    return schema;
   }
 
   public validatePartial<T>(
