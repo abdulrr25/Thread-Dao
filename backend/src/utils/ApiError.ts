@@ -11,6 +11,23 @@ export class ApiError extends Error {
   }
 }
 
+export const handleError = (error: Error) => {
+  if (error instanceof ApiError) {
+    return {
+      statusCode: error.statusCode,
+      message: error.message,
+      isOperational: error.isOperational,
+    };
+  }
+
+  // Handle unexpected errors
+  return {
+    statusCode: 500,
+    message: 'Internal server error',
+    isOperational: false,
+  };
+};
+
 export class ValidationError extends ApiError {
   errors: any;
 

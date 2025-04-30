@@ -3,13 +3,12 @@ import bcrypt from 'bcryptjs';
 const SALT_ROUNDS = 10;
 
 export const hashPassword = async (password: string): Promise<string> => {
-  const salt = await bcrypt.genSalt(SALT_ROUNDS);
-  return bcrypt.hash(password, salt);
+  return bcrypt.hash(password, SALT_ROUNDS);
 };
 
 export const comparePassword = async (
-  candidatePassword: string,
+  password: string,
   hashedPassword: string
 ): Promise<boolean> => {
-  return bcrypt.compare(candidatePassword, hashedPassword);
+  return bcrypt.compare(password, hashedPassword);
 }; 

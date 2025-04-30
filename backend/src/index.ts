@@ -2,16 +2,21 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger';
+import { errorHandler } from './middleware/errorHandler';
+import { requestLogger } from './middleware/requestLogger';
+import { apiLimiter } from './middleware/rateLimit';
+import { logger } from './utils/logger';
+import { envVars } from './lib/env';
 import { createClient } from '@supabase/supabase-js';
 import { Connection } from '@solana/web3.js';
-import { envVars } from './lib/env';
-import { logger } from './lib/logger';
-import { errorHandler } from './middleware/errorHandler';
-import { apiLimiter, authLimiter } from './middleware/rateLimit';
 import postRoutes from './routes/post.js';
 import aiRoutes from './routes/ai.js';
 import userRoutes from './routes/user.js';
 import daoRoutes from './routes/dao.js';
+import authRoutes from './routes/auth.routes';
+import proposalRoutes from './routes/proposal.routes';
 
 // Initialize Express app
 const app = express();
@@ -23,52 +28,25 @@ export const supabase = createClient(envVars.SUPABASE_URL, envVars.SUPABASE_ANON
 // Initialize Solana connection
 export const solanaConnection = new Connection(envVars.SOLANA_RPC_URL);
 
-// Security middleware
+// Middleware
 app.use(helmet());
-app.use(cors({
-  origin: envVars.CORS_ORIGIN,
-  credentials: true,
-}));
-
-// Logging middleware
+app.use(cors());
+app.use(express.json());
 app.use(morgan('dev'));
-
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Apply rate limiting
+app.use(requestLogger);
 app.use(apiLimiter);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    environment: envVars.NODE_ENV,
-    version: process.env.npm_package_version,
-  });
-});
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Welcome endpoint
-app.get('/', (req, res) => {
-  res.json({ 
-    message: 'Welcome to ThreadDAO API',
-    documentation: '/docs',
-    version: process.env.npm_package_version,
-  });
-});
-
-// Apply auth rate limiting to auth routes
-app.use('/api/users/auth', authLimiter);
-
-// API routes
-app.use('/api/posts', postRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/users', userRoutes);
+// Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/daos', daoRoutes);
+app.use('/api/proposals', proposalRoutes);
+app.use('/api/posts', postRoutes);
+app.use('/api/users', userRoutes);
 
-// Error handling middleware
+// Error handling
 app.use(errorHandler);
 
 // Start server

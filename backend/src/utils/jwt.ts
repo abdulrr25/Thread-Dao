@@ -1,19 +1,31 @@
 import jwt from 'jsonwebtoken';
+import { envVars } from '../lib/env';
 import { ApiError } from './ApiError';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+interface TokenPayload {
+  id: string;
+  iat: number;
+  exp: number;
+}
 
-export const generateToken = (userId: string): string => {
-  return jwt.sign({ id: userId }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN
-  });
+export const signToken = (userId: string, expiresIn: string = '1h'): string => {
+  return jwt.sign(
+    { id: userId },
+    envVars.JWT_SECRET,
+    { expiresIn }
+  );
 };
 
-export const verifyToken = (token: string): { id: string } => {
+export const verifyToken = (token: string): TokenPayload => {
   try {
-    return jwt.verify(token, JWT_SECRET) as { id: string };
+    return jwt.verify(token, envVars.JWT_SECRET) as TokenPayload;
   } catch (error) {
-    throw new ApiError(401, 'Invalid token');
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new ApiError(401, 'Token has expired');
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new ApiError(401, 'Invalid token');
+    }
+    throw error;
   }
 }; 
