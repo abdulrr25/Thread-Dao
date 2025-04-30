@@ -1,73 +1,84 @@
 import React from 'react';
-import { Sparkles, Twitter, Github, MessageCircle } from 'lucide-react';
+import { Sparkles, Twitter, Github, MessageCircle, MessageSquare } from 'lucide-react';
+import { Button } from '../ui/button';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { Input } from "@/components/ui/input";
+import { Linkedin } from "lucide-react";
 
 const Footer: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const handleNavigation = (path: string) => {
+    if (path.startsWith('/app') && !user) {
+      navigate('/login');
+    } else {
+      navigate(path);
+    }
+  };
+
+  const handleExternalLink = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   return (
-    <footer className="py-12 px-4 border-t border-muted/30">
-      <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="md:col-span-1">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="h-8 w-8 rounded-full bg-thread-gradient flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
-              <h2 className="text-xl font-bold text-gradient">ThreadDAO</h2>
-            </div>
-            <p className="text-muted-foreground text-sm">
-              Decentralized social platform where every post creates a micro-DAO.
+    <footer className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container mx-auto px-4 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+          <div className="col-span-1 md:col-span-2">
+            <h2 className="text-2xl font-bold mb-4">ThreadDao</h2>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Join the future of decentralized social media. Create, share, and earn with ThreadDao.
             </p>
-            <div className="flex mt-4 space-x-4">
-              <a href="#" className="text-muted-foreground hover:text-primary">
-                <Twitter className="h-5 w-5" />
+            <div className="flex space-x-4">
+              <a href="https://twitter.com/threaddao" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm">
+                  <Twitter className="h-5 w-5" />
+                </Button>
               </a>
-              <a href="#" className="text-muted-foreground hover:text-primary">
-                <Github className="h-5 w-5" />
+              <a href="https://github.com/threaddao" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm">
+                  <Github className="h-5 w-5" />
+                </Button>
               </a>
-              <a href="#" className="text-muted-foreground hover:text-primary">
-                <MessageCircle className="h-5 w-5" />
+              <a href="https://linkedin.com/company/threaddao" target="_blank" rel="noopener noreferrer">
+                <Button variant="ghost" size="sm">
+                  <Linkedin className="h-5 w-5" />
+                </Button>
               </a>
             </div>
           </div>
           
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Platform</h3>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Home</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Explore</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Semantic Search</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">My DAOs</a></li>
+            <h3 className="font-semibold mb-4">Product</h3>
+            <ul className="space-y-2">
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">Features</a></li>
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">Pricing</a></li>
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">Documentation</a></li>
             </ul>
           </div>
           
           <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Resources</h3>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Documentation</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">API</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">GitHub</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Whitepaper</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider mb-4">Company</h3>
-            <ul className="space-y-2 text-sm">
-              <li><a href="#" className="text-muted-foreground hover:text-primary">About</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Blog</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Careers</a></li>
-              <li><a href="#" className="text-muted-foreground hover:text-primary">Contact</a></li>
+            <h3 className="font-semibold mb-4">Company</h3>
+            <ul className="space-y-2">
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">About</a></li>
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">Blog</a></li>
+              <li><a href="#" className="text-muted-foreground hover:text-primary transition-colors">Careers</a></li>
             </ul>
           </div>
         </div>
         
-        <div className="mt-12 pt-6 border-t border-muted/30 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-muted-foreground text-sm mb-4 md:mb-0">
-            &copy; 2025 ThreadDAO. All rights reserved.
-          </p>
-          <div className="flex space-x-6 text-sm">
-            <a href="#" className="text-muted-foreground hover:text-primary">Privacy Policy</a>
-            <a href="#" className="text-muted-foreground hover:text-primary">Terms of Service</a>
-            <a href="#" className="text-muted-foreground hover:text-primary">Cookie Policy</a>
+        <div className="mt-16 pt-8 border-t border-border">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-sm text-muted-foreground">
+              © 2024 ThreadDao. All rights reserved.
+            </p>
+            <div className="flex space-x-6">
+              <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Privacy</a>
+              <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Terms</a>
+              <a href="#" className="text-sm text-muted-foreground hover:text-primary transition-colors">Cookies</a>
+            </div>
           </div>
         </div>
       </div>

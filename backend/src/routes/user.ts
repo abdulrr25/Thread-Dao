@@ -1,15 +1,13 @@
-import express from 'express';
-import { getUserProfile, createUserProfile, updateUserProfile } from '../controllers/userController';
+import { Router } from 'express';
+import { connectWallet, getProfile } from '../controllers/user';
+import { authenticate } from '../middleware/auth';
 
-const router = express.Router();
+const router = Router();
 
-// Get user profile by wallet address
-router.get('/profile/:address', getUserProfile);
+// Public routes
+router.post('/auth/connect', connectWallet);
 
-// Create new user profile
-router.post('/profile', createUserProfile);
-
-// Update user profile
-router.put('/profile/:address', updateUserProfile);
+// Protected routes
+router.get('/profile', authenticate, getProfile);
 
 export default router; 

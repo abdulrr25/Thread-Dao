@@ -8,6 +8,7 @@ import { AuthenticatedRequest } from '../types/express.js';
 import { AuthenticationError } from '../lib/errors';
 import { envVars } from '../lib/env';
 import { logger } from '../lib/logger';
+import { verifyToken } from '../lib/jwt';
 
 interface JwtPayload {
   walletAddress: string;
@@ -18,7 +19,9 @@ interface JwtPayload {
 declare global {
   namespace Express {
     interface Request {
-      user?: JwtPayload;
+      user?: {
+        id: string;
+      };
     }
   }
 }
@@ -78,30 +81,25 @@ export const restrictTo = (...roles: string[]) => {
   };
 };
 
-export const auth = async (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const authHeader = req.headers.authorization;
+
     if (!authHeader?.startsWith('Bearer ')) {
-      logger.warn('No token provided');
-      throw new AuthenticationError('No token provided');
+      return res.status(401).json({ error: 'No token provided' });
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, envVars.JWT_SECRET) as JwtPayload;
+    const decoded = verifyToken(token);
 
     req.user = decoded;
-    logger.info('JWT authentication successful', { walletAddress: decoded.walletAddress });
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      logger.warn('Invalid JWT token');
-      next(new AuthenticationError('Invalid token'));
-    } else if (error instanceof jwt.TokenExpiredError) {
-      logger.warn('Expired JWT token');
-      next(new AuthenticationError('Token expired'));
-    } else {
-      logger.error('JWT authentication error', { error });
-      next(error);
-    }
+    logger.error('Authentication error:', error);
+    res.status(401).json({ error: 'Invalid token' });
   }
 }; 

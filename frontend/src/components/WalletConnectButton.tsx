@@ -5,24 +5,16 @@ import { useWallet } from '../context/WalletContext';
 import { useToast } from "../hooks/use-toast";
 
 const WalletConnectButton: React.FC = () => {
-  const { address, connected, connect, disconnect } = useWallet();
+  const { address, isConnected, connect, disconnect } = useWallet();
   const { toast } = useToast();
-  const shortAddress = address ? `${address.slice(0, 4)}...${address.slice(-4)}` : '';
+  const shortAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
 
   const handleClick = async () => {
     try {
-      if (connected) {
+      if (isConnected) {
         await disconnect();
-        toast({
-          title: "Wallet Disconnected",
-          description: "Your wallet has been disconnected successfully.",
-        });
       } else {
         await connect();
-        toast({
-          title: "Wallet Connected",
-          description: "Your wallet has been connected successfully.",
-        });
       }
     } catch (error) {
       console.error('Error handling wallet connection:', error);
@@ -37,11 +29,11 @@ const WalletConnectButton: React.FC = () => {
   return (
     <Button 
       onClick={handleClick}
-      variant={connected ? "outline" : "default"}
-      className={`rounded-full font-medium transition-all ${connected ? 'bg-muted hover:bg-muted/80' : 'bg-thread-purple hover:bg-thread-purple/90'}`}
+      variant={isConnected ? "outline" : "default"}
+      className={`rounded-full font-medium transition-all ${isConnected ? 'bg-muted hover:bg-muted/80' : 'bg-thread-purple hover:bg-thread-purple/90'}`}
     >
       <WalletIcon className="w-4 h-4 mr-2" />
-      {connected ? shortAddress : "Connect Wallet"}
+      {isConnected ? shortAddress : "Connect Wallet"}
     </Button>
   );
 };

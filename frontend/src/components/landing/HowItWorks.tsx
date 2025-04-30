@@ -1,70 +1,76 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
+import { Wallet, MessageSquare, Users, Coins } from 'lucide-react';
 
 const HowItWorks: React.FC = () => {
   const steps = [
     {
       number: "01",
       title: "Connect Your Wallet",
-      description: "Start by connecting your wallet to access the ThreadDAO platform securely.",
+      description: "Connect your Web3 wallet to access ThreadDAO's decentralized features and manage your digital assets.",
+      icon: Wallet,
       color: "bg-thread-purple"
     },
     {
       number: "02",
-      title: "Create a Post",
-      description: "Compose your content with optional AI assistance to perfect your message.",
+      title: "Create Your Content",
+      description: "Write posts, share media, or start discussions. Our AI assistant helps you create engaging content.",
+      icon: MessageSquare,
       color: "bg-thread-teal"
     },
     {
       number: "03",
-      title: "DAO is Created",
-      description: "Upon publishing, a micro-DAO is created with you as the founder and your content at its center.",
+      title: "Launch Your DAO",
+      description: "Your post automatically creates a micro-DAO with governance tokens and voting rights for members.",
+      icon: Users,
       color: "bg-thread-pink"
     },
     {
       number: "04",
-      title: "Community Engagement",
-      description: "Others discover your DAO, join as members, and engage through comments, votes, and content minting.",
+      title: "Earn & Engage",
+      description: "Earn tokens for valuable contributions and engage with your community through voting and discussions.",
+      icon: Coins,
       color: "bg-thread-purple"
     }
   ];
 
   return (
-    <div className="py-16 px-4 bg-thread-dark/30">
-      <div className="max-w-5xl mx-auto">
+    <div className="py-24 px-4 bg-thread-dark/30">
+      <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <Badge variant="outline" className="mb-4 px-4 py-1 text-primary bg-primary/10 border-primary/20">
             Simple Process
           </Badge>
-          <h2 className="text-3xl font-bold mb-4">How ThreadDAO Works</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">How ThreadDAO Works</h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            From posting content to creating a thriving micro-DAO, our process is straightforward and intuitive.
+            From creating content to building a thriving community, our platform makes Web3 social simple and rewarding.
           </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {steps.map((step, idx) => (
-            <div key={idx} className="flex gap-6">
-              <div className={`h-12 w-12 rounded-full ${step.color} flex-shrink-0 flex items-center justify-center text-white font-bold`}>
-                {step.number}
+            <div key={idx} className="flex gap-6 group">
+              <div className={`h-14 w-14 rounded-xl ${step.color} flex-shrink-0 flex items-center justify-center text-white group-hover:scale-110 transition-transform duration-300`}>
+                <step.icon className="h-7 w-7" />
               </div>
               <div>
-                <h3 className="text-xl font-semibold mb-2">{step.title}</h3>
-                <p className="text-muted-foreground">{step.description}</p>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-sm font-medium text-muted-foreground">{step.number}</span>
+                  <h3 className="text-xl font-semibold">{step.title}</h3>
+                </div>
+                <p className="text-muted-foreground leading-relaxed">{step.description}</p>
               </div>
             </div>
           ))}
         </div>
         
-        <div className="mt-16 relative">
-          <div className="absolute inset-0 bg-thread-gradient opacity-10 rounded-xl blur-3xl"></div>
-          <div className="relative z-10 rounded-xl overflow-hidden border border-primary/20">
-            <img 
-              src="https://images.unsplash.com/photo-1488590528505-98d2b5aba04b" 
-              alt="ThreadDAO Interface" 
-              className="w-full h-auto object-cover"
-            />
-          </div>
+        <div className="mt-20 relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-primary/20 to-transparent rounded-3xl"></div>
+          <img
+            src="/images/platform-preview.png"
+            alt="ThreadDao Platform Preview"
+            className="relative z-10 rounded-3xl shadow-2xl"
+          />
         </div>
       </div>
     </div>

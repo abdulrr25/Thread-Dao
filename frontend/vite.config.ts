@@ -17,26 +17,19 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      external: ['@solana/web3.js'],
+    },
   },
   define: {
     'process.env': {},
-    'global': {},
+    global: 'globalThis',
   },
   optimizeDeps: {
     esbuildOptions: {
       define: {
         global: 'globalThis',
       },
-      plugins: [
-        {
-          name: 'fix-buffer',
-          setup(build) {
-            build.onResolve({ filter: /^buffer$/ }, () => {
-              return { path: require.resolve('buffer/') }
-            })
-          },
-        },
-      ],
     },
   },
 })
