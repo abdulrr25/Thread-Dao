@@ -12,6 +12,8 @@ const envSchema = z.object({
   SOLANA_RPC_URL: z.string().default('https://api.mainnet-beta.solana.com'),
   SUPABASE_URL: z.string().optional(),
   SUPABASE_ANON_KEY: z.string().optional(),
+  RATE_LIMIT_WINDOW_MS: z.string().default('900000'), // 15 minutes
+  RATE_LIMIT_MAX: z.string().default('100'), // 100 requests per window
 });
 
 export const envVars = envSchema.parse(process.env); 

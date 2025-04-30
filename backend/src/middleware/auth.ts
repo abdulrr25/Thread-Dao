@@ -9,11 +9,19 @@ import { AuthenticationError } from '../lib/errors';
 import { envVars } from '../lib/env';
 import { logger } from '../lib/logger';
 import { verifyToken } from '../lib/jwt';
+import { supabase } from '../services/supabase';
 
 interface JwtPayload {
   walletAddress: string;
   iat: number;
   exp: number;
+}
+
+interface AuthRequest extends Request {
+  user?: {
+    address: string;
+    role: string;
+  };
 }
 
 declare global {
@@ -25,6 +33,8 @@ declare global {
     }
   }
 }
+
+export const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -81,25 +91,52 @@ export const restrictTo = (...roles: string[]) => {
   };
 };
 
-export const authenticate = async (
-  req: Request,
+export const authMiddleware = async (
+  req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
     const authHeader = req.headers.authorization;
-
     if (!authHeader?.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    const decoded = jwt.verify(token, JWT_SECRET) as { address: string };
 
-    req.user = decoded;
+    // Verify user exists in database
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('wallet_address', decoded.address)
+      .single();
+
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    req.user = {
+      address: decoded.address,
+      role: user.role || 'member',
+    };
+
     next();
   } catch (error) {
-    logger.error('Authentication error:', error);
-    res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid token' });
   }
+};
+
+export const requireRole = (roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    next();
+  };
 }; 

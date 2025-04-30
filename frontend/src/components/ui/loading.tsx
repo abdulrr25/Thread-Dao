@@ -1,11 +1,13 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 
 interface LoadingProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  text?: string;
 }
 
-export const Loading: React.FC<LoadingProps> = ({ size = 'md', className = '' }) => {
+export function Loading({ size = 'md', className, text }: LoadingProps) {
   const sizeClasses = {
     sm: 'w-4 h-4',
     md: 'w-8 h-8',
@@ -13,10 +15,31 @@ export const Loading: React.FC<LoadingProps> = ({ size = 'md', className = '' })
   };
 
   return (
-    <div className={`flex items-center justify-center ${className}`}>
+    <div className={cn('flex flex-col items-center justify-center gap-2', className)}>
       <div
-        className={`${sizeClasses[size]} border-4 border-blue-500 border-t-transparent rounded-full animate-spin`}
+        className={cn(
+          'animate-spin rounded-full border-4 border-primary border-t-transparent',
+          sizeClasses[size]
+        )}
       />
+      {text && <p className="text-sm text-muted-foreground">{text}</p>}
     </div>
   );
-}; 
+}
+
+export function LoadingPage() {
+  return (
+    <div className="flex h-screen w-full items-center justify-center">
+      <Loading size="lg" text="Loading..." />
+    </div>
+  );
+}
+
+export function LoadingButton({ text = 'Loading...' }: { text?: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Loading size="sm" />
+      <span>{text}</span>
+    </div>
+  );
+} 

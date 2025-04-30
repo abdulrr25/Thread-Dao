@@ -1,140 +1,140 @@
-import React, { useEffect, useState } from 'react';
-import Sidebar from '@/components/Sidebar';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useWallet } from '@/context/WalletContext';
+import { apiService } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Users, Sparkles, PlusCircle } from 'lucide-react';
-import { useWallet } from '@/context/WalletContext';
-import { api } from '@/services/api';
-import { useToast } from '@/hooks/use-toast';
-import { Link } from 'react-router-dom';
+import { 
+  PlusCircle, Users, Coins, Settings, 
+  ArrowLeft, Shield, Globe 
+} from 'lucide-react';
 
-interface Dao {
+interface DAO {
   id: string;
   name: string;
   description: string;
-  creatorAddress: string;
-  tokenName: string;
-  tokenSymbol: string;
-  members: any[];
-  posts: any[];
+  creator_address: string;
+  token_symbol: string;
+  token_name: string;
+  member_count: number;
+  is_owner: boolean;
+  is_member: boolean;
+  category: string;
+  is_public: boolean;
 }
 
-const MyDaos = () => {
-  const { address, isConnected } = useWallet();
-  const { toast } = useToast();
-  const [daos, setDaos] = useState<Dao[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function MyDAOs() {
+  const { address } = useWallet();
 
-  useEffect(() => {
-    if (isConnected && address) {
-      fetchDaos();
-    }
-  }, [isConnected, address]);
+  const { data: daos, isLoading } = useQuery<DAO[]>({
+    queryKey: ['my-daos', address],
+    queryFn: () => apiService.getMyDaos(),
+    enabled: !!address,
+  });
 
-  const fetchDaos = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getUserDaos(address!);
-      setDaos(data);
-    } catch (error) {
-      console.error('Error fetching DAOs:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch DAOs",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isConnected) {
+  if (isLoading) {
     return (
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 p-8">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <h2 className="text-2xl font-bold mb-4">Connect Your Wallet</h2>
-              <p className="text-muted-foreground mb-4">
-                Please connect your wallet to view your DAOs
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+      <div className="max-w-6xl mx-auto py-8 px-4">
+        <div className="text-center">Loading your DAOs...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar />
-      
-      <div className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">My DAOs</h1>
-          <Button asChild>
-            <Link to="/create-dao">
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create New DAO
-            </Link>
-          </Button>
+    <div className="max-w-6xl mx-auto py-8 px-4">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center">
+          <Link to="/app">
+            <Button variant="ghost" size="sm" className="mr-3">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
+          <h1 className="text-3xl font-bold">My DAOs</h1>
         </div>
+        <Button asChild className="gap-2 bg-thread-gradient hover:opacity-90">
+          <Link to="/app/create-dao">
+            <PlusCircle className="h-4 w-4" />
+            Create DAO
+          </Link>
+        </Button>
+      </div>
 
-        {loading ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">Loading your DAOs...</p>
-          </div>
-        ) : daos.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <h2 className="text-xl font-bold mb-2">No DAOs Created Yet</h2>
-              <p className="text-muted-foreground mb-4">
-                You haven't created any DAOs yet. Create your first DAO to get started!
-              </p>
-              <Button asChild>
-                <Link to="/create-dao">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Create Your First DAO
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {daos.map((dao) => (
-              <Card key={dao.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{dao.name}</span>
-                    <Badge variant="outline" className="gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      {dao.tokenSymbol}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground mb-4">{dao.description}</p>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span>{dao.members.length} members</span>
+      {!daos || daos.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center">
+            <h3 className="text-lg font-medium mb-2">No DAOs Found</h3>
+            <p className="text-muted-foreground mb-4">
+              You haven't created or joined any DAOs yet.
+            </p>
+            <Button asChild className="gap-2 bg-thread-gradient hover:opacity-90">
+              <Link to="/app/create-dao">
+                <PlusCircle className="h-4 w-4" />
+                Create Your First DAO
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {daos.map((dao) => (
+            <Card key={dao.id} className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl mb-1">
+                      <Link to={`/dao/${dao.id}`} className="hover:underline">
+                        {dao.name}
+                      </Link>
+                    </CardTitle>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Badge variant="outline" className="capitalize">
+                        {dao.category}
+                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Globe className="h-3.5 w-3.5" />
+                        <span>{dao.is_public ? 'Public' : 'Private'}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-4">
-                    <Button variant="outline" className="w-full" asChild>
-                      <Link to={`/dao/${dao.id}`}>
-                        View DAO
+                  {dao.is_owner && (
+                    <Badge variant="outline" className="gap-1">
+                      <Shield className="h-3 w-3" />
+                      Owner
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-4 line-clamp-2">
+                  {dao.description}
+                </p>
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      <span>{dao.member_count}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Coins className="h-4 w-4" />
+                      <span>{dao.token_symbol}</span>
+                    </div>
+                  </div>
+                  {dao.is_owner && (
+                    <Button variant="ghost" size="sm" asChild>
+                      <Link to={`/dao/${dao.id}/settings`}>
+                        <Settings className="h-4 w-4" />
                       </Link>
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
-};
-
-export default MyDaos;
+}

@@ -1,16 +1,16 @@
 {
   "name": "threaddao-backend",
   "version": "1.0.0",
-  "description": "ThreadDAO Backend API",
-  "type": "module",
+  "description": "Backend for ThreadDAO - Decentralized Social Media Platform",
   "main": "dist/index.js",
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
     "lint": "eslint . --ext .ts",
     "test": "jest",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",

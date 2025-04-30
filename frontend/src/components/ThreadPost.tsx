@@ -1,9 +1,9 @@
 import React from 'react';
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Heart, MessageSquare, Share, Users, Sparkles } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { Heart, MessageCircle, Share2, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 
 interface ThreadPostProps {
   id: string;
@@ -13,85 +13,65 @@ interface ThreadPostProps {
     avatar: string;
   };
   content: string;
-  image?: string;
   createdAt: string;
   likes: number;
   comments: number;
   shares: number;
   daoMembers: number;
-  hasJoined?: boolean;
 }
 
-const ThreadPost: React.FC<ThreadPostProps> = ({
+export default function ThreadPost({
   author,
   content,
-  image,
   createdAt,
   likes,
   comments,
   shares,
   daoMembers,
-  hasJoined
-}) => {
+}: ThreadPostProps) {
   return (
-    <Card className="mb-4 overflow-hidden border-muted/40 glass-card">
-      <CardHeader className="flex flex-row items-center gap-3 pb-2">
-        <Avatar className="h-10 w-10 border border-primary/20">
+    <div className="bg-white/5 backdrop-blur-md rounded-xl p-6 border border-white/10 hover:border-white/20 transition-colors">
+      <div className="flex space-x-4">
+        <Avatar className="h-10 w-10">
           <AvatarImage src={author.avatar} alt={author.name} />
-          <AvatarFallback className="bg-primary/20">{author.name.charAt(0)}</AvatarFallback>
+          <AvatarFallback>{author.name[0]}</AvatarFallback>
         </Avatar>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">{author.name}</span>
-            <span className="text-muted-foreground text-xs">@{author.handle}</span>
+        
+        <div className="flex-1">
+          <div className="flex items-center space-x-2 mb-2">
+            <span className="font-semibold">{author.name}</span>
+            <span className="text-muted-foreground">@{author.handle}</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-muted-foreground">
+              {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+            </span>
           </div>
-          <span className="text-xs text-muted-foreground">{createdAt}</span>
-        </div>
-        <div className="ml-auto">
-          <Badge variant="outline" className="gap-1 bg-primary/10 text-primary-foreground text-xs">
-            <Users className="h-3 w-3" />
-            <span>{daoMembers} members</span>
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="pb-2">
-        <p className="text-sm mb-3">{content}</p>
-        {image && (
-          <div className="relative aspect-video rounded-md overflow-hidden mb-3">
-            <img 
-              src={image} 
-              alt="Post content" 
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-          </div>
-        )}
-      </CardContent>
-      <CardFooter className="flex justify-between pt-0">
-        <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary hover:bg-primary/10 px-2">
-            <Heart className="h-4 w-4 mr-1" />
-            <span className="text-xs">{likes}</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-secondary hover:bg-secondary/10 px-2">
-            <MessageSquare className="h-4 w-4 mr-1" />
-            <span className="text-xs">{comments}</span>
-          </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-accent hover:bg-accent/10 px-2">
-            <Share className="h-4 w-4 mr-1" />
-            <span className="text-xs">{shares}</span>
-          </Button>
-        </div>
-        <Button 
-          variant={hasJoined ? "outline" : "default"} 
-          size="sm" 
-          className={`rounded-full px-3 ${hasJoined ? 'bg-primary/10 hover:bg-primary/20 text-primary' : 'bg-primary hover:bg-primary/90'}`}
-        >
-          <Sparkles className="h-3 w-3 mr-1" />
-          <span className="text-xs">{hasJoined ? 'Joined DAO' : 'Join DAO'}</span>
-        </Button>
-      </CardFooter>
-    </Card>
-  );
-};
 
-export default ThreadPost;
+          <p className="text-sm mb-4 whitespace-pre-wrap">{content}</p>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Heart className="h-4 w-4" />
+                <span>{likes}</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <MessageCircle className="h-4 w-4" />
+                <span>{comments}</span>
+              </Button>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <Share2 className="h-4 w-4" />
+                <span>{shares}</span>
+              </Button>
+            </div>
+
+            <Badge variant="secondary" className="gap-1">
+              <Users className="h-3 w-3" />
+              <span>{daoMembers} members</span>
+            </Badge>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

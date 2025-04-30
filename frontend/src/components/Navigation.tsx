@@ -1,53 +1,60 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
-
-const navigation = [
-  { name: 'Home', href: '/' },
-  { name: 'DAOs', href: '/daos' },
-  { name: 'Threads', href: '/threads' },
-];
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Search, Bell, Settings } from 'lucide-react';
+import { useWallet } from '@/context/WalletContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Navigation() {
-  const pathname = usePathname();
+  const { address } = useWallet();
+  const { user } = useAuth();
 
   return (
-    <nav className="bg-white dark:bg-gray-800 shadow">
-      <div className="container mx-auto px-4">
-        <div className="flex justify-between h-16">
-          <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
-              <Link href="/" className="text-xl font-bold text-gray-900 dark:text-white">
-                ThreadDAO
-              </Link>
+    <header className="border-b border-white/10">
+      <div className="flex h-16 items-center px-4">
+        <div className="flex items-center space-x-4">
+          <Link to="/app" className="flex items-center space-x-2">
+            <div className="h-8 w-8 rounded-full bg-thread-gradient flex items-center justify-center">
+              <span className="text-white font-bold text-lg">T</span>
             </div>
-            <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                href="/dashboard"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  pathname === '/dashboard'
-                    ? 'border-indigo-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/daos"
-                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  pathname === '/daos'
-                    ? 'border-indigo-500 text-gray-900 dark:text-white'
-                    : 'border-transparent text-gray-500 dark:text-gray-300 hover:border-gray-300 hover:text-gray-700 dark:hover:text-gray-200'
-                }`}
-              >
-                DAOs
-              </Link>
+            <span className="font-bold text-xl">ThreadDAO</span>
+          </Link>
+        </div>
+
+        <div className="flex-1 flex justify-center px-4">
+          <div className="w-full max-w-xl">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search DAOs, posts, or users..."
+                className="pl-9 bg-white/5 border-white/10"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="sm" className="relative">
+            <Bell className="h-5 w-5" />
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-red-500 text-[10px] font-medium text-white flex items-center justify-center">
+              3
+            </span>
+          </Button>
+
+          <Button variant="ghost" size="sm">
+            <Settings className="h-5 w-5" />
+          </Button>
+
+          <div className="flex items-center space-x-2">
+            <div className="text-sm text-muted-foreground">
+              {user?.username || address?.slice(0, 6) + '...' + address?.slice(-4)}
             </div>
           </div>
         </div>
       </div>
-    </nav>
+    </header>
   );
 } 

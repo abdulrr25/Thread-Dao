@@ -1,101 +1,111 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from 'axios';
 import { supabase } from '@/services/supabase';
-import { Post, DaoData, DaoProposal } from '@/types/dao';
+import { Post, DaoData, DaoProposal, UserProfile } from '@/types/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-class ApiService {
+interface ApiResponse<T> {
+  data: T;
+  error?: string;
+}
+
+export interface ApiService {
+  // DAO related
+  getDao: (id: string) => Promise<ApiResponse<any>>;
+  getMyDaos: () => Promise<ApiResponse<any[]>>;
+  createDao: (data: any) => Promise<ApiResponse<any>>;
+  getTrendingDaos: () => Promise<ApiResponse<any[]>>;
+  
+  // Activity related
+  getRecentActivities: () => Promise<ApiResponse<any[]>>;
+  
+  // Post related
+  getTrendingPosts: () => Promise<ApiResponse<any[]>>;
+  createPost: (data: any) => Promise<ApiResponse<any>>;
+}
+
+class ApiServiceImpl implements ApiService {
   private api: AxiosInstance;
 
   constructor() {
     this.api = axios.create({
       baseURL: API_URL,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      timeout: 10000,
     });
 
-    this.api.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
+    this.setupInterceptors();
+  }
 
+  private setupInterceptors() {
     this.api.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
+      async (error: AxiosError) => {
         if (error.response?.status === 401) {
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+          // TODO: Implement token refresh logic
+          return Promise.reject(error);
         }
         return Promise.reject(error);
       }
     );
   }
 
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  private async request<T>(method: string, url: string, data?: any): Promise<ApiResponse<T>> {
     try {
-      const response = await this.api.get<T>(url, config);
-      return response.data;
+      const response = await this.api({
+        method,
+        url,
+        data,
+      });
+      return { data: response.data };
     } catch (error) {
-      this.handleError(error);
-      throw error;
+      console.error('API request failed:', error);
+      return {
+        data: null as unknown as T,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      };
     }
   }
 
-  async post<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    try {
-      const response = await this.api.post<T>(url, data, config);
-      return response.data;
-    } catch (error) {
-      this.handleError(error);
-      throw error;
-    }
+  // DAO related
+  async getDao(id: string): Promise<ApiResponse<any>> {
+    return this.request('GET', `/daos/${id}`);
   }
 
-  async put<T>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
-    try {
-      const response = await this.api.put<T>(url, data, config);
-      return response.data;
-    } catch (error) {
-      this.handleError(error);
-      throw error;
-    }
+  async getMyDaos(): Promise<ApiResponse<any[]>> {
+    return this.request('GET', '/daos/my');
   }
 
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    try {
-      const response = await this.api.delete<T>(url, config);
-      return response.data;
-    } catch (error) {
-      this.handleError(error);
-      throw error;
-    }
+  async createDao(data: any): Promise<ApiResponse<any>> {
+    return this.request('POST', '/daos', data);
   }
 
-  private handleError(error: unknown): void {
-    if (axios.isAxiosError(error)) {
-      const message = error.response?.data?.message || error.message;
-      console.error('API Error:', message);
-    } else {
-      console.error('Unknown Error:', error);
-    }
+  async getTrendingDaos(): Promise<ApiResponse<any[]>> {
+    return this.request('GET', '/daos/trending');
+  }
+
+  // Activity related
+  async getRecentActivities(): Promise<ApiResponse<any[]>> {
+    return this.request('GET', '/activities/recent');
+  }
+
+  // Post related
+  async getTrendingPosts(): Promise<ApiResponse<any[]>> {
+    return this.request('GET', '/posts/trending');
+  }
+
+  async createPost(data: any): Promise<ApiResponse<any>> {
+    return this.request('POST', '/posts', data);
   }
 
   // User Profile
-  async getUserProfile(address: string): Promise<any> {
+  async getUserProfile(address: string): Promise<UserProfile> {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('wallet_address', address)
       .single();
 
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return data;
   }
 
@@ -104,14 +114,14 @@ class ApiService {
     username: string;
     bio: string;
     avatar: string;
-  }): Promise<any> {
+  }): Promise<UserProfile> {
     const { data: profile, error } = await supabase
       .from('profiles')
       .insert([data])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return profile;
   }
 
@@ -138,36 +148,8 @@ class ApiService {
       .select('*')
       .eq('creator_address', address);
 
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return data;
-  }
-
-  async getDao(id: string): Promise<DaoData> {
-    const { data, error } = await supabase
-      .from('daos')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  async createDao(data: {
-    name: string;
-    description: string;
-    creator_address: string;
-    token_name: string;
-    token_symbol: string;
-  }): Promise<DaoData> {
-    const { data: dao, error } = await supabase
-      .from('daos')
-      .insert([data])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return dao;
   }
 
   async updateDao(id: string, data: {
@@ -188,24 +170,8 @@ class ApiService {
       .eq('dao_id', daoId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return data;
-  }
-
-  async createPost(data: {
-    dao_id: string;
-    author_address: string;
-    content: string;
-    title: string;
-  }): Promise<Post> {
-    const { data: post, error } = await supabase
-      .from('posts')
-      .insert([data])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return post;
   }
 
   // Proposals
@@ -216,7 +182,7 @@ class ApiService {
       .eq('dao_id', daoId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return data;
   }
 
@@ -228,21 +194,14 @@ class ApiService {
       .order('created_at', { ascending: false })
       .limit(6);
 
-    if (error) throw error;
-    return data;
-  }
-
-  // Trending Posts
-  async getTrendingPosts(): Promise<Post[]> {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(4);
-
-    if (error) throw error;
+    if (error) throw this.handleError(error);
     return data;
   }
 }
 
-export const api = new ApiService(); 
+// Create and export a single instance
+const apiService = new ApiServiceImpl();
+
+// Export both the instance and the class for backward compatibility
+export { apiService };
+export const api = apiService; 

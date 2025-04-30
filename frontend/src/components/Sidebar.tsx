@@ -1,73 +1,73 @@
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Home, Search, Bell, Sparkles, Users, PlusCircle, User } from 'lucide-react';
-import WalletConnectButton from './WalletConnectButton';
 import { Link, useLocation } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Home, Search, Bell, Sparkles, Users, PlusCircle, User } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
 
-const Sidebar: React.FC = () => {
-  const location = useLocation();
-  const { isConnected } = useWallet();
+const navItems = [
+  { name: 'Home', icon: Home, href: '/app' },
+  { name: 'Explore', icon: Search, href: '/app/explore' },
+  { name: 'Notifications', icon: Bell, href: '/app/notifications' },
+  { name: 'Semantic Search', icon: Sparkles, href: '/app/semantic-search' },
+  { name: 'My DAOs', icon: Users, href: '/app/my-daos' },
+  { name: 'Profile', icon: User, href: '/app/profile' }
+];
 
-  const navItems = [
-    { name: 'Home', icon: Home, href: '/feed' },
-    { name: 'Explore', icon: Search, href: '/explore' },
-    { name: 'Notifications', icon: Bell, href: '/notifications' },
-    { name: 'Semantic Search', icon: Sparkles, href: '/semantic-search' },
-    { name: 'My DAOs', icon: Users, href: '/my-daos' },
-    { name: 'Profile', icon: User, href: '/profile' }
-  ];
+export default function Sidebar() {
+  const location = useLocation();
+  const { address } = useWallet();
 
   const isActive = (href: string) => {
-    if (href === '/feed') {
-      return location.pathname === '/feed' || location.pathname === '/';
+    if (href === '/app') {
+      return location.pathname === '/app' || location.pathname === '/app/';
     }
     return location.pathname === href;
   };
 
   return (
-    <div className="h-screen sticky top-0 w-64 border-r border-muted/30 p-4 flex flex-col">
-      <div className="mb-6 flex items-center gap-2">
-        <div className="h-8 w-8 rounded-full bg-thread-gradient flex items-center justify-center">
-          <Sparkles className="h-5 w-5 text-white" />
+    <div className="w-64 min-h-screen border-r border-white/10 p-4">
+      <div className="space-y-4">
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold">Navigation</h2>
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <Link key={item.href} to={item.href}>
+                <Button
+                  variant={isActive(item.href) ? "secondary" : "ghost"}
+                  className="w-full justify-start gap-2"
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.name}
+                </Button>
+              </Link>
+            ))}
+          </div>
         </div>
-        <h1 className="text-xl font-bold text-gradient">ThreadDAO</h1>
-      </div>
-      
-      <nav className="space-y-1 mb-6">
-        {navItems.map((item) => (
-          <Button
-            key={item.name}
-            variant="ghost"
-            asChild
-            className={`w-full justify-start text-base font-medium ${
-              isActive(item.href)
-                ? 'bg-primary/10 text-primary' 
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            <Link to={item.href}>
-              <item.icon className="mr-3 h-5 w-5" />
-              {item.name}
+
+        <div className="px-3 py-2">
+          <h2 className="mb-2 px-4 text-lg font-semibold">Create</h2>
+          <div className="space-y-1">
+            <Link to="/app/create-post">
+              <Button
+                variant="default"
+                className="w-full justify-start gap-2 bg-thread-gradient hover:opacity-90"
+              >
+                <PlusCircle className="h-4 w-4" />
+                Create DAO
+              </Button>
             </Link>
-          </Button>
-        ))}
-      </nav>
-      
-      <Button 
-        variant="default" 
-        className="w-full bg-thread-gradient hover:opacity-90 rounded-full mb-auto"
-        disabled={!isConnected}
-      >
-        <PlusCircle className="mr-2 h-5 w-5" />
-        New Post
-      </Button>
-      
-      <div className="mt-6">
-        <WalletConnectButton />
+          </div>
+        </div>
+
+        <div className="px-3 py-2">
+          <div className="rounded-lg bg-white/5 p-4">
+            <h3 className="font-semibold mb-2">Wallet Connected</h3>
+            <p className="text-sm text-muted-foreground break-all">
+              {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Not connected'}
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
-};
-
-export default Sidebar;
+}

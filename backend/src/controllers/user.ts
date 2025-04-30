@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import * as nacl from 'tweetnacl';
-import bs58 from 'bs58';
+import { ethers } from 'ethers';
 import { createToken } from '../lib/jwt';
 import { logger } from '../lib/logger';
 
@@ -15,18 +14,10 @@ export const connectWallet = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Verify the signature using tweetnacl
-    const messageBytes = new TextEncoder().encode(message);
-    const signatureBytes = bs58.decode(signature);
-    const publicKeyBytes = bs58.decode(walletAddress);
+    // Verify the signature using ethers.js
+    const recoveredAddress = ethers.verifyMessage(message, signature);
     
-    const isValid = nacl.sign.detached.verify(
-      messageBytes,
-      signatureBytes,
-      publicKeyBytes
-    );
-
-    if (!isValid) {
+    if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
@@ -60,18 +51,11 @@ export const connectWallet = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { walletAddress: req.user?.walletAddress },
       include: {
         posts: true,
-        createdDaos: true,
-        memberDaos: true,
+        daos: true,
       },
     });
 
@@ -79,14 +63,7 @@ export const getProfile = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({
-      id: user.id,
-      walletAddress: user.walletAddress,
-      createdAt: user.createdAt,
-      posts: user.posts,
-      createdDaos: user.createdDaos,
-      memberDaos: user.memberDaos,
-    });
+    res.json(user);
   } catch (error) {
     logger.error('Error in getProfile:', error);
     res.status(500).json({ error: 'Internal server error' });
