@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import Joi from 'joi';
 
 // DAO schemas
 export const createDaoSchema = z.object({
@@ -94,4 +95,83 @@ export const leaveDaoSchema = z.object({
   params: z.object({
     daoId: z.string().uuid(),
   }),
+});
+
+// User validation schemas
+export const registerSchema = Joi.object({
+  name: Joi.string().required().min(2).max(50),
+  handle: Joi.string().required().min(3).max(30).pattern(/^[a-zA-Z0-9_]+$/),
+  email: Joi.string().required().email(),
+  password: Joi.string().required().min(8),
+  walletAddress: Joi.string().pattern(/^[0-9a-fA-F]{40}$/)
+});
+
+export const loginSchema = Joi.object({
+  email: Joi.string().required().email(),
+  password: Joi.string().required()
+});
+
+export const updateProfileSchema = Joi.object({
+  name: Joi.string().min(2).max(50),
+  handle: Joi.string().min(3).max(30).pattern(/^[a-zA-Z0-9_]+$/),
+  bio: Joi.string().max(500),
+  avatar: Joi.string().uri()
+});
+
+export const updateWalletSchema = Joi.object({
+  walletAddress: Joi.string().required().pattern(/^[0-9a-fA-F]{40}$/)
+});
+
+// DAO validation schemas
+export const createDAOSchema = Joi.object({
+  name: Joi.string().required().min(3).max(50),
+  description: Joi.string().required().max(1000),
+  category: Joi.string().required().valid('defi', 'nft', 'governance', 'social', 'other'),
+  tokenSymbol: Joi.string().required().max(10),
+  tokenAddress: Joi.string().pattern(/^[0-9a-fA-F]{40}$/),
+  isPublic: Joi.boolean(),
+  votingPeriod: Joi.number().required().min(1).max(30),
+  quorum: Joi.number().required().min(1).max(100)
+});
+
+export const updateDAOSchema = Joi.object({
+  name: Joi.string().min(3).max(50),
+  description: Joi.string().max(1000),
+  category: Joi.string().valid('defi', 'nft', 'governance', 'social', 'other'),
+  isPublic: Joi.boolean()
+});
+
+// Proposal validation schemas
+export const createProposalSchema = Joi.object({
+  title: Joi.string().required().min(3).max(200),
+  description: Joi.string().required().max(2000),
+  type: Joi.string().required().valid('general', 'token', 'member'),
+  startTime: Joi.date().required(),
+  endTime: Joi.date().required().min(Joi.ref('startTime')),
+  metadata: Joi.object()
+});
+
+export const voteSchema = Joi.object({
+  vote: Joi.string().required().valid('for', 'against', 'abstain'),
+  reason: Joi.string().max(500),
+  power: Joi.number().required().min(0)
+});
+
+// Post validation schemas
+export const createPostSchema = Joi.object({
+  content: Joi.string().required().max(500),
+  dao: Joi.string().pattern(/^[0-9a-fA-F]{24}$/)
+});
+
+export const updatePostSchema = Joi.object({
+  content: Joi.string().max(500)
+});
+
+// Comment validation schemas
+export const createCommentSchema = Joi.object({
+  content: Joi.string().required().max(200)
+});
+
+export const updateCommentSchema = Joi.object({
+  content: Joi.string().max(200)
 }); 

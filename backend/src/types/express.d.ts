@@ -1,15 +1,12 @@
 import { Request } from 'express';
+import { User } from '@prisma/client';
 
 declare module 'express' {
   interface Request {
-    user?: {
-      walletAddress: string;
-    };
+    user?: User;
   }
 }
 
 export interface AuthenticatedRequest extends Request {
-  user: {
-    walletAddress: string;
-  };
+  user: User;
 } 

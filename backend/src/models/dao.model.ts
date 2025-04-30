@@ -3,10 +3,12 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IDAO extends Document {
   name: string;
   description: string;
+  category: string;
   creator: mongoose.Types.ObjectId;
   members: mongoose.Types.ObjectId[];
   tokenSymbol: string;
-  initialSupply: number;
+  tokenAddress?: string;
+  isPublic: boolean;
   votingPeriod: number;
   quorum: number;
   createdAt: Date;
@@ -18,17 +20,22 @@ const daoSchema = new Schema<IDAO>(
     name: {
       type: String,
       required: [true, 'DAO name is required'],
-      trim: true,
-      unique: true
+      trim: true
     },
     description: {
       type: String,
-      required: [true, 'DAO description is required']
+      required: [true, 'Description is required'],
+      maxlength: [1000, 'Description cannot exceed 1000 characters']
+    },
+    category: {
+      type: String,
+      required: [true, 'Category is required'],
+      enum: ['defi', 'nft', 'governance', 'social', 'other']
     },
     creator: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'DAO creator is required']
+      required: [true, 'Creator is required']
     },
     members: [{
       type: Schema.Types.ObjectId,
@@ -39,15 +46,18 @@ const daoSchema = new Schema<IDAO>(
       required: [true, 'Token symbol is required'],
       uppercase: true
     },
-    initialSupply: {
-      type: Number,
-      required: [true, 'Initial supply is required'],
-      min: [0, 'Initial supply cannot be negative']
+    tokenAddress: {
+      type: String
+    },
+    isPublic: {
+      type: Boolean,
+      default: true
     },
     votingPeriod: {
       type: Number,
       required: [true, 'Voting period is required'],
-      min: [1, 'Voting period must be at least 1 day']
+      min: [1, 'Voting period must be at least 1 day'],
+      max: [30, 'Voting period cannot exceed 30 days']
     },
     quorum: {
       type: Number,
@@ -60,5 +70,13 @@ const daoSchema = new Schema<IDAO>(
     timestamps: true
   }
 );
+
+// Add indexes for efficient querying
+daoSchema.index({ name: 1 });
+daoSchema.index({ category: 1 });
+daoSchema.index({ creator: 1 });
+daoSchema.index({ members: 1 });
+daoSchema.index({ tokenSymbol: 1 });
+daoSchema.index({ isPublic: 1 });
 
 export const DAO = mongoose.model<IDAO>('DAO', daoSchema); 

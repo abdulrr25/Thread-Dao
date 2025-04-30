@@ -2,39 +2,24 @@ import { Request, Response, NextFunction } from 'express';
 import { AnyZodObject, ZodError } from 'zod';
 import { ValidationError } from '../lib/errors';
 import { logger } from '../lib/logger';
+import { ApiError } from '../utils/ApiError';
+import { Schema } from 'joi';
 
-export const validate = (schema: AnyZodObject) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      await schema.parseAsync({
-        body: req.body,
-        query: req.query,
-        params: req.params,
-      });
-      next();
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const errors = error.errors.map((err) => ({
-          path: err.path.join('.'),
-          message: err.message,
-        }));
-        logger.warn('Validation failed', {
-          path: req.path,
-          method: req.method,
-          errors,
-        });
-        return res.status(400).json({
-          error: 'Validation error',
-          details: errors,
-        });
-      }
-      logger.error('Unexpected validation error', {
-        path: req.path,
-        method: req.method,
-        error,
-      });
-      next(error);
+export const validate = (schema: Schema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const { error } = schema.validate(req.body, {
+      abortEarly: false,
+      stripUnknown: true
+    });
+
+    if (error) {
+      const errorMessage = error.details
+        .map((detail) => detail.message)
+        .join(', ');
+      return next(new ApiError(400, errorMessage));
     }
+
+    next();
   };
 };
 

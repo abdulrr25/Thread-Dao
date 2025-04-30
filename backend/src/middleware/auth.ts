@@ -1,79 +1,55 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { PublicKey } from '@solana/web3.js';
-import bs58 from 'bs58';
-import nacl from 'tweetnacl';
-import { AppError } from '../lib/errors';
-import { AuthenticatedRequest } from '../types/express.js';
-import { AuthenticationError } from '../lib/errors';
-import { envVars } from '../lib/env';
-import { logger } from '../lib/logger';
-import { verifyToken } from '../lib/jwt';
-import { supabase } from '../services/supabase';
+import { User } from '@prisma/client';
+import { prisma } from '../lib/prisma';
+import { logger } from '../utils/logger';
+import { AuthenticatedRequest } from '../types/express';
+import { verifyToken } from '../utils/jwt';
+import { AuthenticationError, AuthorizationError } from '../lib/errors';
 
-interface JwtPayload {
-  walletAddress: string;
-  iat: number;
-  exp: number;
-}
-
-interface AuthRequest extends Request {
-  user?: {
-    address: string;
-    role: string;
-  };
-}
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
-        id: string;
-      };
-    }
-  }
-}
-
-export const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-export const protect = async (req: Request, res: Response, next: NextFunction) => {
+export const protect = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const signature = req.headers['x-signature'] as string;
-    const message = req.headers['x-message'] as string;
-    const publicKey = req.headers['x-public-key'] as string;
-
-    if (!signature || !message || !publicKey) {
-      logger.warn('Missing authentication headers', { headers: req.headers });
-      return next(new AuthenticationError('Missing required authentication headers'));
+    // 1) Get token from Authorization header
+    let token;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith('Bearer')
+    ) {
+      token = req.headers.authorization.split(' ')[1];
     }
 
-    // Verify the signature
-    try {
-      const pubKeyBytes = bs58.decode(publicKey);
-      const verified = nacl.sign.detached.verify(
-        new TextEncoder().encode(message),
-        bs58.decode(signature),
-        pubKeyBytes
-      );
-
-      if (!verified) {
-        logger.warn('Invalid signature', { publicKey });
-        return next(new AuthenticationError('Invalid signature'));
-      }
-
-      // Add the user object to the request for use in route handlers
-      (req as AuthenticatedRequest).user = {
-        walletAddress: publicKey,
-      };
-      logger.info('User authenticated successfully', { walletAddress: publicKey });
-      next();
-    } catch (error) {
-      logger.error('Signature verification failed', { error, publicKey });
-      return next(new AuthenticationError('Invalid signature or public key'));
+    if (!token) {
+      logger.warn('No auth token provided', { path: req.path });
+      throw new AuthenticationError('You are not logged in. Please log in to get access.');
     }
+
+    // 2) Verify token
+    const decoded = verifyToken(token);
+
+    // 3) Check if user still exists
+    const currentUser = await prisma.user.findUnique({
+      where: { id: decoded.id }
+    });
+
+    if (!currentUser) {
+      logger.warn('User not found for token', { userId: decoded.id });
+      throw new AuthenticationError('The user belonging to this token no longer exists.');
+    }
+
+    // Grant access to protected route
+    req.user = currentUser;
+    logger.info('User authenticated successfully', { userId: currentUser.id });
+    next();
   } catch (error) {
-    logger.error('Authentication error', { error });
-    return next(new AppError('Internal server error during authentication', 500));
+    if (error instanceof AuthenticationError) {
+      next(error);
+    } else {
+      logger.error('Authentication error', { error });
+      next(new AuthenticationError('Invalid token. Please log in again.'));
+    }
   }
 };
 
@@ -91,52 +67,85 @@ export const restrictTo = (...roles: string[]) => {
   };
 };
 
-export const authMiddleware = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
+export const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Get token from header
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
+      throw new AuthenticationError('No token provided');
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { address: string };
 
-    // Verify user exists in database
-    const { data: user, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('wallet_address', decoded.address)
-      .single();
+    // Verify token
+    const decoded = verifyToken(token);
 
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid token' });
+    // Get user from token
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        walletAddress: true
+      }
+    });
+    if (!user) {
+      throw new AuthenticationError('User not found');
     }
 
-    req.user = {
-      address: decoded.address,
-      role: user.role || 'member',
-    };
-
+    // Add user to request
+    req.user = user;
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    next(error);
   }
 };
 
 export const requireRole = (roles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Authentication required' });
+      throw new AuthenticationError('Authentication required');
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Insufficient permissions' });
+      throw new AuthenticationError('Insufficient permissions');
     }
 
     next();
   };
+};
+
+// Middleware for checking if user is a DAO member
+export const isDAOMember = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { daoId } = req.params;
+    const currentUser = req.user;
+
+    const dao = await prisma.dao.findFirst({
+      where: {
+        id: daoId,
+        members: {
+          some: {
+            id: currentUser.id
+          }
+        }
+      }
+    });
+
+    if (!dao) {
+      logger.warn('User not a member of DAO', { userId: currentUser.id, daoId });
+      throw new AuthorizationError('You are not a member of this DAO');
+    }
+
+    logger.info('DAO membership verified', { userId: currentUser.id, daoId });
+    next();
+  } catch (error) {
+    next(error);
+  }
 }; 

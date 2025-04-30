@@ -9,7 +9,14 @@ datasource db {
 
 model User {
   id            String    @id @default(cuid())
-  walletAddress String    @unique
+  name          String
+  handle        String    @unique
+  email         String    @unique
+  password      String
+  bio          String?
+  avatar       String?
+  walletAddress String?   @unique
+  role         String    @default("user")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   posts         Post[]
@@ -30,12 +37,18 @@ model Post {
 }
 
 model Dao {
-  id          String   @id @default(cuid())
-  name        String
-  description String
-  creator     User     @relation("DaoCreator", fields: [creatorId], references: [id])
-  creatorId   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  members     User[]   @relation("DaoMembers")
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  category      String
+  creator       User     @relation("DaoCreator", fields: [creatorId], references: [id])
+  creatorId     String
+  tokenSymbol   String
+  tokenAddress  String?
+  isPublic      Boolean  @default(true)
+  votingPeriod  Int
+  quorum        Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       User[]   @relation("DaoMembers")
 } 

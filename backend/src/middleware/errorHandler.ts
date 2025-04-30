@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError } from '../lib/errors';
-import { logger } from '../lib/logger';
+import { ApiError, ValidationError } from '../utils/ApiError';
 
 export const errorHandler = (
   err: Error,
@@ -8,33 +7,18 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  if (err instanceof AppError) {
-    logger.error({
-      message: err.message,
-      statusCode: err.statusCode,
-      stack: err.stack,
-      path: req.path,
-      method: req.method,
-    });
-
+  if (err instanceof ApiError) {
     return res.status(err.statusCode).json({
       status: 'error',
       message: err.message,
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+      ...(err instanceof ValidationError && { errors: err.errors }),
     });
   }
 
   // Handle unexpected errors
-  logger.error({
-    message: err.message,
-    stack: err.stack,
-    path: req.path,
-    method: req.method,
-  });
-
+  console.error('Unexpected error:', err);
   return res.status(500).json({
     status: 'error',
     message: 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 }; 

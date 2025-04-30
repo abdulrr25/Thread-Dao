@@ -1,6 +1,7 @@
 import rateLimit from 'express-rate-limit';
 import { envVars } from '../lib/env';
 import { logger } from '../lib/logger';
+import { ApiError } from '../utils/ApiError';
 
 const rateLimitWindow = parseInt(envVars.RATE_LIMIT_WINDOW_MS);
 const rateLimitMax = parseInt(envVars.RATE_LIMIT_MAX);
@@ -10,40 +11,32 @@ if (isNaN(rateLimitWindow) || isNaN(rateLimitMax)) {
   throw new Error('Invalid rate limit configuration');
 }
 
+// General API rate limiter
 export const apiLimiter = rateLimit({
-  windowMs: rateLimitWindow,
-  max: rateLimitMax,
-  message: {
-    status: 'error',
-    message: 'Too many requests, please try again later.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res, next, options) => {
-    logger.warn('Rate limit exceeded', {
-      ip: req.ip,
-      path: req.path,
-      method: req.method,
-    });
-    res.status(options.statusCode).json(options.message);
-  },
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later',
+  handler: (req, res) => {
+    throw new ApiError(429, 'Too many requests from this IP, please try again later');
+  }
 });
 
+// Stricter limiter for auth routes
 export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts
-  message: {
-    status: 'error',
-    message: 'Too many login attempts, please try again later.',
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res, next, options) => {
-    logger.warn('Auth rate limit exceeded', {
-      ip: req.ip,
-      path: req.path,
-      method: req.method,
-    });
-    res.status(options.statusCode).json(options.message);
-  },
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: 'Too many login attempts, please try again later',
+  handler: (req, res) => {
+    throw new ApiError(429, 'Too many login attempts, please try again later');
+  }
+});
+
+// DAO creation limiter
+export const daoCreationLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000, // 24 hours
+  max: 3, // Limit each IP to 3 DAO creations per day
+  message: 'Too many DAO creation attempts, please try again later',
+  handler: (req, res) => {
+    throw new ApiError(429, 'Too many DAO creation attempts, please try again later');
+  }
 }); 
