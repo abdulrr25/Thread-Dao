@@ -3,10 +3,11 @@ import jwt from 'jsonwebtoken';
 import { PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 import nacl from 'tweetnacl';
-import { AppError } from './errorHandler';
+import { AppError } from '../lib/errors';
 import { AuthenticatedRequest } from '../types/express.js';
 import { AuthenticationError } from '../lib/errors';
 import { envVars } from '../lib/env';
+import { logger } from '../lib/logger';
 
 interface JwtPayload {
   walletAddress: string;
@@ -29,7 +30,8 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     const publicKey = req.headers['x-public-key'] as string;
 
     if (!signature || !message || !publicKey) {
-      return next(new AppError('Missing required authentication headers', 401));
+      logger.warn('Missing authentication headers', { headers: req.headers });
+      return next(new AuthenticationError('Missing required authentication headers'));
     }
 
     // Verify the signature
@@ -42,18 +44,22 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
       );
 
       if (!verified) {
-        return next(new AppError('Invalid signature', 401));
+        logger.warn('Invalid signature', { publicKey });
+        return next(new AuthenticationError('Invalid signature'));
       }
 
       // Add the user object to the request for use in route handlers
       (req as AuthenticatedRequest).user = {
         walletAddress: publicKey,
       };
+      logger.info('User authenticated successfully', { walletAddress: publicKey });
       next();
     } catch (error) {
-      return next(new AppError('Invalid signature or public key', 401));
+      logger.error('Signature verification failed', { error, publicKey });
+      return next(new AuthenticationError('Invalid signature or public key'));
     }
   } catch (error) {
+    logger.error('Authentication error', { error });
     return next(new AppError('Internal server error during authentication', 500));
   }
 };
@@ -61,11 +67,13 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
 export const restrictTo = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return next(new AppError('You are not logged in', 401));
+      logger.warn('Unauthorized access attempt', { roles });
+      return next(new AuthenticationError('You are not logged in'));
     }
 
     // TODO: Implement role-based access control
     // This will require adding roles to the user model and checking them here
+    logger.info('Role check passed', { roles, user: req.user.walletAddress });
     next();
   };
 };
@@ -74,6 +82,7 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
+      logger.warn('No token provided');
       throw new AuthenticationError('No token provided');
     }
 
@@ -81,13 +90,17 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     const decoded = jwt.verify(token, envVars.JWT_SECRET) as JwtPayload;
 
     req.user = decoded;
+    logger.info('JWT authentication successful', { walletAddress: decoded.walletAddress });
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
+      logger.warn('Invalid JWT token');
       next(new AuthenticationError('Invalid token'));
     } else if (error instanceof jwt.TokenExpiredError) {
+      logger.warn('Expired JWT token');
       next(new AuthenticationError('Token expired'));
     } else {
+      logger.error('JWT authentication error', { error });
       next(error);
     }
   }

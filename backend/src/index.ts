@@ -23,23 +23,40 @@ export const supabase = createClient(envVars.SUPABASE_URL, envVars.SUPABASE_ANON
 // Initialize Solana connection
 export const solanaConnection = new Connection(envVars.SOLANA_RPC_URL);
 
-// Middleware
-app.use(cors());
+// Security middleware
 app.use(helmet());
+app.use(cors({
+  origin: envVars.CORS_ORIGIN,
+  credentials: true,
+}));
+
+// Logging middleware
 app.use(morgan('dev'));
-app.use(express.json());
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Apply rate limiting
 app.use(apiLimiter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    environment: envVars.NODE_ENV,
+    version: process.env.npm_package_version,
+  });
 });
 
-// Routes
+// Welcome endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to ThreadDAO API' });
+  res.json({ 
+    message: 'Welcome to ThreadDAO API',
+    documentation: '/docs',
+    version: process.env.npm_package_version,
+  });
 });
 
 // Apply auth rate limiting to auth routes
@@ -57,4 +74,7 @@ app.use(errorHandler);
 // Start server
 app.listen(port, () => {
   logger.info(`Server is running on port ${port} in ${envVars.NODE_ENV} mode`);
+  logger.info(`CORS origin: ${envVars.CORS_ORIGIN}`);
+  logger.info(`Supabase URL: ${envVars.SUPABASE_URL}`);
+  logger.info(`Solana RPC URL: ${envVars.SOLANA_RPC_URL}`);
 });

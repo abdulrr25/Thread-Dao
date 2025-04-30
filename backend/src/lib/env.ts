@@ -13,6 +13,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string(),
   RATE_LIMIT_WINDOW_MS: z.string().default('900000'), // 15 minutes
   RATE_LIMIT_MAX: z.string().default('100'),
+  CORS_ORIGIN: z.string().default('*'),
 });
 
 const env = envSchema.safeParse(process.env);

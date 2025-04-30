@@ -13,7 +13,8 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   posts         Post[]
-  daos          Dao[]
+  createdDaos   Dao[]     @relation("DaoCreator")
+  memberDaos    Dao[]     @relation("DaoMembers")
 }
 
 model Post {
@@ -32,9 +33,9 @@ model Dao {
   id          String   @id @default(cuid())
   name        String
   description String
-  creator     User     @relation(fields: [creatorId], references: [id])
+  creator     User     @relation("DaoCreator", fields: [creatorId], references: [id])
   creatorId   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  members     User[]
+  members     User[]   @relation("DaoMembers")
 } 

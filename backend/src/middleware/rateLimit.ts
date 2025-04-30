@@ -1,15 +1,32 @@
 import rateLimit from 'express-rate-limit';
 import { envVars } from '../lib/env';
+import { logger } from '../lib/logger';
+
+const rateLimitWindow = parseInt(envVars.RATE_LIMIT_WINDOW_MS);
+const rateLimitMax = parseInt(envVars.RATE_LIMIT_MAX);
+
+if (isNaN(rateLimitWindow) || isNaN(rateLimitMax)) {
+  logger.error('Invalid rate limit configuration', { rateLimitWindow, rateLimitMax });
+  throw new Error('Invalid rate limit configuration');
+}
 
 export const apiLimiter = rateLimit({
-  windowMs: parseInt(envVars.RATE_LIMIT_WINDOW_MS),
-  max: parseInt(envVars.RATE_LIMIT_MAX),
+  windowMs: rateLimitWindow,
+  max: rateLimitMax,
   message: {
     status: 'error',
     message: 'Too many requests, please try again later.',
   },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    logger.warn('Rate limit exceeded', {
+      ip: req.ip,
+      path: req.path,
+      method: req.method,
+    });
+    res.status(options.statusCode).json(options.message);
+  },
 });
 
 export const authLimiter = rateLimit({
@@ -21,4 +38,12 @@ export const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res, next, options) => {
+    logger.warn('Auth rate limit exceeded', {
+      ip: req.ip,
+      path: req.path,
+      method: req.method,
+    });
+    res.status(options.statusCode).json(options.message);
+  },
 }); 
