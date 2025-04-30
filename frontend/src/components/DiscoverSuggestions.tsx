@@ -1,8 +1,9 @@
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Button } from './ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
+import { PlusCircle, Users } from 'lucide-react';
 
 interface DiscoverSuggestionsProps {
   title: string;
@@ -46,7 +47,49 @@ const DiscoverSuggestions: React.FC<DiscoverSuggestionsProps> = ({ title }) => {
   ];
 
   return (
-    <div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Button asChild variant="outline" className="w-full justify-start">
+            <Link to="/create-dao">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create New DAO
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start">
+            <Link to="/my-daos">
+              <Users className="mr-2 h-4 w-4" />
+              My DAOs
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>DAO Stats</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Total DAOs</span>
+              <span className="font-medium">0</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Active Members</span>
+              <span className="font-medium">0</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-muted-foreground">Recent Activities</span>
+              <span className="font-medium">0</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <h2 className="text-xl font-semibold mb-6">{title}</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

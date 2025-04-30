@@ -152,3 +152,79 @@ export const getProposalVotes = catchAsync(async (req: Request, res: Response) =
     data: { votes }
   });
 });
+
+export const getTrendingDaos = catchAsync(async (req: Request, res: Response) => {
+  const { limit = 5 } = req.query;
+
+  // Get DAOs with most members and recent activity
+  const daos = await DAO.aggregate([
+    {
+      $lookup: {
+        from: 'proposals',
+        localField: '_id',
+        foreignField: 'dao',
+        as: 'proposals'
+      }
+    },
+    {
+      $lookup: {
+        from: 'votes',
+        localField: 'proposals._id',
+        foreignField: 'proposal',
+        as: 'votes'
+      }
+    },
+    {
+      $addFields: {
+        memberCount: { $size: '$members' },
+        proposalCount: { $size: '$proposals' },
+        voteCount: { $size: '$votes' },
+        activityScore: {
+          $add: [
+            { $size: '$members' },
+            { $multiply: [{ $size: '$proposals' }, 2] },
+            { $size: '$votes' }
+          ]
+        }
+      }
+    },
+    {
+      $sort: { activityScore: -1 }
+    },
+    {
+      $limit: Number(limit)
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'creator',
+        foreignField: '_id',
+        as: 'creator'
+      }
+    },
+    {
+      $unwind: '$creator'
+    },
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        description: 1,
+        category: 1,
+        member_count: '$memberCount',
+        token_symbol: 1,
+        is_public: 1,
+        creator: {
+          name: 1,
+          handle: 1,
+          avatar: 1
+        }
+      }
+    }
+  ]);
+
+  res.status(200).json({
+    status: 'success',
+    data: daos
+  });
+});

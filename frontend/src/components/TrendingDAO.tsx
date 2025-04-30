@@ -1,57 +1,90 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../services/api';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { Users, Coins, Globe, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { TrendingUp } from 'lucide-react';
 
-interface TrendingDAOsProps {
-  className?: string;
+interface TrendingDAO {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  member_count: number;
+  token_symbol: string;
+  is_public: boolean;
 }
 
-const TrendingDAOs: React.FC<TrendingDAOsProps> = ({ className }) => {
-  // Mock trending DAOs data
-  const trendingDAOs = [
-    { id: '1', name: 'MetaCollective', members: 1234, category: 'Social' },
-    { id: '2', name: 'DeFi Alliance', members: 876, category: 'DeFi' },
-    { id: '3', name: 'NFT Creators', members: 543, category: 'NFTs' },
-  ];
+export function TrendingDAO() {
+  const { data: trendingDaos, error } = useQuery({
+    queryKey: ['trendingDaos'],
+    queryFn: () => api.getTrendingDaos()
+  });
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Trending DAOs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center text-muted-foreground">
+            Failed to load trending DAOs
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className={className}>
+    <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Trending DAOs
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Trending DAOs</CardTitle>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/my-daos" className="flex items-center gap-1">
+              View All
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {trendingDAOs.map((dao) => (
-            <div key={dao.id} className="flex items-center justify-between">
-              <div>
-                <Link
-                  to={`/dao/${dao.id}`}
-                  className="font-medium hover:text-primary transition-colors"
-                >
-                  {dao.name}
-                </Link>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{dao.members} members</span>
-                  <Badge variant="outline" className="text-xs">
-                    {dao.category}
-                  </Badge>
+        <div className="space-y-4">
+          {trendingDaos?.map((dao: TrendingDAO) => (
+            <Link key={dao.id} to={`/dao/${dao.id}`}>
+              <Card className="p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-medium mb-1">{dao.name}</h3>
+                    <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+                      {dao.description}
+                    </p>
+                    <div className="flex items-center gap-3 text-sm">
+                      <Badge variant="outline" className="capitalize">
+                        {dao.category}
+                      </Badge>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        <span>{dao.member_count}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Coins className="h-3.5 w-3.5" />
+                        <span>{dao.token_symbol}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-muted-foreground">
+                    <Globe className="h-3.5 w-3.5" />
+                    <span>{dao.is_public ? 'Public' : 'Private'}</span>
+                  </div>
                 </div>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to={`/dao/${dao.id}`}>View</Link>
-              </Button>
-            </div>
+              </Card>
+            </Link>
           ))}
         </div>
       </CardContent>
     </Card>
   );
-};
-
-export default TrendingDAOs;
+}

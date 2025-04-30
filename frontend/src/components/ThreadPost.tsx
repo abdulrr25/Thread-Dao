@@ -1,77 +1,129 @@
-import React from 'react';
-import { formatDistanceToNow } from 'date-fns';
+import { useState } from 'react';
+import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Heart, MessageCircle, Share2, Users } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { useToast } from '../hooks/use-toast';
+import { api } from '../services/api';
+
+interface Author {
+  name: string;
+  handle: string;
+  avatar: string;
+}
 
 interface ThreadPostProps {
   id: string;
-  author: {
-    name: string;
-    handle: string;
-    avatar: string;
-  };
   content: string;
-  createdAt: string;
+  author: Author;
+  timestamp: string;
   likes: number;
   comments: number;
   shares: number;
   daoMembers: number;
 }
 
-export default function ThreadPost({
-  author,
+export function ThreadPost({
+  id,
   content,
-  createdAt,
-  likes,
-  comments,
-  shares,
-  daoMembers,
+  author,
+  timestamp,
+  likes: initialLikes,
+  comments: initialComments,
+  shares: initialShares,
+  daoMembers
 }: ThreadPostProps) {
+  const [likes, setLikes] = useState(initialLikes);
+  const [comments, setComments] = useState(initialComments);
+  const [shares, setShares] = useState(initialShares);
+  const [isLiked, setIsLiked] = useState(false);
+  const { toast } = useToast();
+
+  const handleLike = async () => {
+    try {
+      if (isLiked) {
+        await api.unlikePost(id);
+        setLikes((prev) => prev - 1);
+      } else {
+        await api.likePost(id);
+        setLikes((prev) => prev + 1);
+      }
+      setIsLiked(!isLiked);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update like status',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      await api.sharePost(id);
+      setShares((prev) => prev + 1);
+      toast({
+        title: 'Success',
+        description: 'Post shared successfully'
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to share post',
+        variant: 'destructive'
+      });
+    }
+  };
+
   return (
-    <div className="bg-white/5 backdrop-blur-md rounded-xl p-6 border border-white/10 hover:border-white/20 transition-colors">
-      <div className="flex space-x-4">
+    <Card className="p-6">
+      <div className="flex items-start gap-4">
         <Avatar className="h-10 w-10">
           <AvatarImage src={author.avatar} alt={author.name} />
           <AvatarFallback>{author.name[0]}</AvatarFallback>
         </Avatar>
-        
         <div className="flex-1">
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="font-semibold">{author.name}</span>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-medium">{author.name}</span>
             <span className="text-muted-foreground">@{author.handle}</span>
             <span className="text-muted-foreground">·</span>
             <span className="text-muted-foreground">
-              {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+              {new Date(timestamp).toLocaleDateString()}
             </span>
           </div>
-
-          <p className="text-sm mb-4 whitespace-pre-wrap">{content}</p>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Heart className="h-4 w-4" />
-                <span>{likes}</span>
-              </Button>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <MessageCircle className="h-4 w-4" />
-                <span>{comments}</span>
-              </Button>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <Share2 className="h-4 w-4" />
-                <span>{shares}</span>
-              </Button>
-            </div>
-
-            <Badge variant="secondary" className="gap-1">
-              <Users className="h-3 w-3" />
+          <p className="text-sm mb-4">{content}</p>
+          <div className="flex items-center gap-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={handleLike}
+            >
+              <Heart
+                className={`h-4 w-4 ${isLiked ? 'fill-current text-red-500' : ''}`}
+              />
+              <span>{likes}</span>
+            </Button>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <MessageCircle className="h-4 w-4" />
+              <span>{comments}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={handleShare}
+            >
+              <Share2 className="h-4 w-4" />
+              <span>{shares}</span>
+            </Button>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Users className="h-4 w-4" />
               <span>{daoMembers} members</span>
-            </Badge>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
